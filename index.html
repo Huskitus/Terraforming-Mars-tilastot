@@ -315,7 +315,9 @@
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px" id="ranking-sort">
         <button class="sort-btn" onclick="setRankingSort('avg')">⭐ Keskiarvo</button>
         <button class="sort-btn" onclick="setRankingSort('best')">🏆 Paras tulos</button>
-        <button class="sort-btn active" onclick="setRankingSort('wins')">👑 Voitot</button>
+        <button class="sort-btn active" onclick="setRankingSort('wins')">🥇 Voitot</button>
+        <button class="sort-btn" onclick="setRankingSort('second')">🥈 Toinen sija</button>
+        <button class="sort-btn" onclick="setRankingSort('third')">🥉 Kolmas sija</button>
         <button class="sort-btn" onclick="setRankingSort('games')">🎲 Pelejä</button>
         <button class="sort-btn" onclick="setRankingSort('winpct')">📈 Voitto%</button>
       </div>
@@ -631,8 +633,9 @@ function setRankingFilter(n) {
 
 function setRankingSort(key) {
   rankingSort = key;
+  const keys = ['avg','best','wins','second','third','games','winpct'];
   document.querySelectorAll('#ranking-sort .sort-btn').forEach((b,i) =>
-    b.classList.toggle('active', i === ['avg','best','wins','games','winpct'].indexOf(key)));
+    b.classList.toggle('active', i === keys.indexOf(key)));
   renderRanking();
 }
 
@@ -649,14 +652,16 @@ function renderRanking() {
   const stats = {};
   filtered.forEach(g => {
     const scores = g.scores || [];
-    const max = Math.max(...scores.map(s=>s.total||0));
-    const winner = scores.find(s=>s.total===max)?.player;
+    const sorted = [...scores].sort((a,b) => (b.total||0) - (a.total||0));
     scores.forEach(s => {
-      if(!stats[s.player]) stats[s.player] = { wins:0, games:0, total:0, best:0 };
+      if(!stats[s.player]) stats[s.player] = { wins:0, second:0, third:0, games:0, total:0, best:0 };
       stats[s.player].games++;
       stats[s.player].total += s.total||0;
       if((s.total||0) > stats[s.player].best) stats[s.player].best = s.total;
-      if(s.player === winner) stats[s.player].wins++;
+      const pos = sorted.findIndex(x => x.player === s.player);
+      if(pos === 0) stats[s.player].wins++;
+      else if(pos === 1) stats[s.player].second++;
+      else if(pos === 2) stats[s.player].third++;
     });
   });
 
@@ -664,6 +669,8 @@ function renderRanking() {
     avg:    (a,b) => b.avg - a.avg,
     best:   (a,b) => b.best - a.best,
     wins:   (a,b) => b.wins - a.wins || b.avg - a.avg,
+    second: (a,b) => b.second - a.second || b.avg - a.avg,
+    third:  (a,b) => b.third - a.third || b.avg - a.avg,
     games:  (a,b) => b.games - a.games || b.avg - a.avg,
     winpct: (a,b) => b.winpct - a.winpct || b.avg - a.avg,
   };
@@ -675,15 +682,16 @@ function renderRanking() {
       winpct: Math.round(s.wins / s.games * 100),
       ...s
     }))
-    .sort(sortFns[rankingSort] || sortFns.avg);
+    .sort(sortFns[rankingSort] || sortFns.wins);
 
-  // Labels for highlighted stat per sort mode
   const highlight = {
-    avg:    p => ({ val: p.avg,              lbl: 'ka' }),
-    best:   p => ({ val: p.best,             lbl: 'paras' }),
-    wins:   p => ({ val: p.wins,             lbl: 'voittoa' }),
-    games:  p => ({ val: p.games,            lbl: 'peliä' }),
-    winpct: p => ({ val: p.winpct + '%',     lbl: 'voitto%' }),
+    avg:    p => ({ val: p.avg,          lbl: 'ka' }),
+    best:   p => ({ val: p.best,         lbl: 'paras' }),
+    wins:   p => ({ val: p.wins,         lbl: 'voittoa' }),
+    second: p => ({ val: p.second,       lbl: '2. sijaa' }),
+    third:  p => ({ val: p.third,        lbl: '3. sijaa' }),
+    games:  p => ({ val: p.games,        lbl: 'peliä' }),
+    winpct: p => ({ val: p.winpct + '%', lbl: 'voitto%' }),
   };
 
   el.innerHTML = ranked.map((p,i) => {
@@ -695,12 +703,13 @@ function renderRanking() {
       <div class="rank-name">${p.name}</div>
       <div class="rank-stats">
         <span style="${rankingSort==='games'?'color:var(--text)':''}">${p.games} peliä</span>
-        <span style="${rankingSort==='wins'?'color:var(--text)':''}">${p.wins} voittoa</span>
-        <span style="${rankingSort==='winpct'?'color:var(--text)':''}">${p.winpct}% voitto</span>
-        <span style="${rankingSort==='best'?'color:var(--text)':''}">${p.best} paras</span>
-        <span style="${rankingSort==='avg'?'color:var(--text)':''}">${p.avg} ka</span>
+        <span style="${rankingSort==='wins'?'color:var(--gold)':'color:#b0b8c8'}" title="Voitot">🥇 ${p.wins}</span>
+        <span style="${rankingSort==='second'?'color:var(--text)':'color:#b0b8c8'}" title="Toiset sijat">🥈 ${p.second}</span>
+        <span style="${rankingSort==='third'?'color:var(--text)':'color:#b0b8c8'}" title="Kolmannet sijat">🥉 ${p.third}</span>
+        <span style="${rankingSort==='winpct'?'color:var(--text)':''}">${p.winpct}%</span>
+        <span style="${rankingSort==='best'?'color:var(--text)':''}">↑${p.best}</span>
+        <span style="${rankingSort==='avg'?'color:var(--text)':''}">⌀${p.avg}</span>
       </div>
-      ${p.wins>0?`<span class="rank-badge">👑 ${p.wins}x</span>`:''}
       <div class="rank-score" title="${h.lbl}">${h.val}</div>
     </div>`; }).join('');
 }
