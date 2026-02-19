@@ -267,6 +267,26 @@
   .toast.success { border-color:#2ecc71; color:#2ecc71; }
   .toast.error   { border-color:#e74c3c; color:#e74c3c; }
 
+  /* ---- RECENT WINNERS BAR ---- */
+  .winners-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 10px 16px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .winners-bar-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted); white-space: nowrap;
+  }
+  .winner-chip {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px 4px 5px;
+    font-size: 13px; font-weight: 600;
+  }
+  .winner-chip-medal { font-size: 14px; line-height: 1; }
+  .winner-chip-game  { font-size: 10px; color: var(--muted); margin-left: 2px; }
+
   /* ---- UTILITIES ---- */
   .flex     { display:flex; }
   .gap-2    { gap:8px; }
@@ -294,12 +314,14 @@
     <button class="btn-auth" id="auth-btn" onclick="toggleLoginModal()">🔐 Kirjaudu</button>
   </div>
 
+  <div id="recent-winners-bar"></div>
+
   <div class="tabs">
     <button class="tab active" onclick="showTab('ranking')">🏆 Ranking</button>
     <button class="tab" onclick="showTab('games')">🎲 Pelit</button>
     <button class="tab" onclick="showTab('season')">🌍 Season</button>
     <button class="tab" onclick="showTab('players')">👤 Pelaajat</button>
-    <button class="tab" onclick="showTab('categories')">📊 Statistiikkaa</button>
+    <button class="tab" onclick="showTab('categories')">📊 Tilastot</button>
     <button class="tab admin-only" id="tab-add" onclick="showTab('add')">➕ Lisää peli</button>
   </div>
 
@@ -698,6 +720,7 @@ async function loadData() {
 
 async function refreshAndRender() {
   await loadData();
+  renderRecentWinners();
   const name = document.querySelector('.panel.active')?.id?.replace('panel-', '') || 'ranking';
   showTab(name);
 }
@@ -739,6 +762,46 @@ function setSort(page, key) {
 
 function selectSeason(key) { ui.currentSeason = key; renderSeason(); }
 function selectPlayer(name) { ui.selectedPlayer = name; renderPlayers(); }
+
+// ============================================================
+// RECENT WINNERS BAR
+// ============================================================
+function renderRecentWinners() {
+  const el = document.getElementById('recent-winners-bar');
+  if (!el) return;
+
+  // Go through games newest-first, pick each player only once, stop at 3
+  const sorted = [...state.games].sort((a, b) => (b.game_num || 0) - (a.game_num || 0));
+  const seen   = new Set();
+  const recent = [];
+
+  for (const g of sorted) {
+    if (recent.length >= 3) break;
+    const scores = g.scores || [];
+    if (!scores.length) continue;
+    const winner = [...scores].sort((a, b) => (b.total || 0) - (a.total || 0))[0];
+    if (!winner || seen.has(winner.player)) continue;
+    seen.add(winner.player);
+    recent.push({ player: winner.player, gameNum: g.game_num, total: winner.total });
+  }
+
+  if (!recent.length) { el.innerHTML = ''; return; }
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const medals_label = ['Viimeisin voittaja', 'Edellinen voittaja', 'Sitä edellinen'];
+
+  el.innerHTML = `
+    <div class="winners-bar">
+      <span class="winners-bar-label">Viimeisimmät voittajat</span>
+      ${recent.map((w, i) => `
+        <div class="winner-chip" style="border-color:${getPlayerColor(w.player)}22">
+          <div class="avatar avatar-sm" style="background:${getPlayerColor(w.player)}">${w.player[0].toUpperCase()}</div>
+          <span class="winner-chip-medal" title="${medals_label[i]}">${medals[i]}</span>
+          <span>${w.player}</span>
+          <span class="winner-chip-game">#${w.gameNum}</span>
+        </div>`).join('')}
+    </div>`;
+}
 
 // ============================================================
 // RANKING
@@ -1088,7 +1151,7 @@ function renderCategories() {
   el.innerHTML = `
     <div class="card" style="margin-bottom:20px">
       <div class="row-between">
-        <div class="card-title" style="margin-bottom:0">Statistiikkaa</div>
+        <div class="card-title" style="margin-bottom:0">Tilastot</div>
         <div class="btn-row" id="stats-filter">
           <button class="filter-btn ${ui.statsFilter === 0 ? 'active' : ''}" onclick="setFilter('stats',0)">Kaikki</button>
           <button class="filter-btn ${ui.statsFilter === 3 ? 'active' : ''}" onclick="setFilter('stats',3)">3 pelaajaa</button>
@@ -1425,6 +1488,7 @@ async function init() {
   document.getElementById('ranking-list').innerHTML = '<div class="loading"><div class="spinner"></div>Ladataan...</div>';
   await initAuth();
   await loadData();
+  renderRecentWinners();
   renderRanking();
 }
 
