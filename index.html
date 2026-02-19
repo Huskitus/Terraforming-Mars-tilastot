@@ -1348,10 +1348,75 @@ function renderCategoriesContent() {
   const gameCount = games.length;
   const label = statsFilter === 0 ? `Kaikki pelit (${gameCount})` : `${statsFilter} pelaajan pelit (${gameCount})`;
 
+  // Total scores stats per player
+  const totalData = players.map(p => {
+    const arr = games.flatMap(g => (g.scores||[]).filter(s=>s.player===p).map(s=>s.total||0));
+    const avg = arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+    const med = median(arr);
+    const max = arr.length ? Math.max(...arr) : 0;
+    const min = arr.length ? Math.min(...arr) : 0;
+    const sum = arr.reduce((a,b)=>a+b,0);
+    return { player:p, avg, med, max, min, sum, count:arr.length };
+  }).sort((a,b)=>b.avg-a.avg);
+
+  const maxAvgT = Math.max(...totalData.map(v=>v.avg), 1);
+  const maxMedT = Math.max(...totalData.map(v=>v.med), 1);
+  const maxMaxT = Math.max(...totalData.map(v=>v.max), 1);
+  const maxMinT = Math.max(...totalData.map(v=>v.min), 1);
+  const maxSumT = Math.max(...totalData.map(v=>v.sum), 1);
+
+  const totalCard = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">⭐ Yhteenlasketut pisteet</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Keskiarvo</div>
+          ${totalData.map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span>${v.avg.toFixed(1)}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.avg/maxAvgT*100).toFixed(1)}%;background:${getPlayerColor(v.player)}"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Mediaani</div>
+          ${[...totalData].sort((a,b)=>b.med-a.med).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span>${v.med.toFixed(1)}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.med/maxMedT*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.7"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Isoin</div>
+          ${[...totalData].sort((a,b)=>b.max-a.max).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span style="color:var(--gold)">${v.max}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.max/maxMaxT*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.5"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Pienin</div>
+          ${[...totalData].sort((a,b)=>b.min-a.min).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span style="color:var(--text-muted)">${v.min}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.min/maxMinT*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.4"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Pisteitä yhteensä</div>
+          ${[...totalData].sort((a,b)=>b.sum-a.sum).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span style="color:var(--mars2)">${v.sum}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.sum/maxSumT*100).toFixed(1)}%;background:${getPlayerColor(v.player)}"></div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+
   el.innerHTML = catCards
     ? `<div class="card" style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--text-muted)">📊 ${label}</div>
        </div>
+       ${totalCard}
        <div class="cat-grid">${catCards}</div>`
     : `<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei tarpeeksi dataa.</div></div>`;
 }
