@@ -1106,6 +1106,15 @@ function renderPlayerProfile() {
   const worstTotal = Math.min(...scores.map(s=>s.total||0));
   const avgPos     = (scores.reduce((a,s)=>a+s.pos,0)/totalGames+1).toFixed(1);
 
+  // Start position (turn_order is 0-based, display as 1-based)
+  const startPositions = scores.map(s => (s.turn_order ?? 0) + 1);
+  const avgStart = (startPositions.reduce((a,b)=>a+b,0) / startPositions.length).toFixed(1);
+  const sortedStarts = [...startPositions].sort((a,b)=>a-b);
+  const mid = Math.floor(sortedStarts.length/2);
+  const medianStart = sortedStarts.length % 2 !== 0
+    ? sortedStarts[mid]
+    : ((sortedStarts[mid-1] + sortedStarts[mid]) / 2).toFixed(1);
+
   // Category averages
   const cats = SCORE_FIELDS.filter(f=>f.key!=='total');
   const catAvgs = cats.map(f => {
@@ -1165,6 +1174,14 @@ function renderPlayerProfile() {
         <div class="profile-stat">
           <div class="profile-stat-val" style="color:var(--text-muted)">${worstTotal}</div>
           <div class="profile-stat-lbl">Heikoin tulos</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${avgStart}</div>
+          <div class="profile-stat-lbl">Ka aloituspaikka</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${medianStart}</div>
+          <div class="profile-stat-lbl">Mediaani aloitus</div>
         </div>
       </div>
     </div>
