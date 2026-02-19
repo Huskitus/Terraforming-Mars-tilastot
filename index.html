@@ -139,6 +139,10 @@
   .gap-2 { gap:8px; }
   .mt-3 { margin-top:12px; }
 
+  .sort-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:5px 12px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .sort-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .sort-btn.active { background:var(--surface2); border-color:var(--mars2); color:var(--mars2); }
+
   /* ---- FILTER BUTTONS ---- */
   .filter-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 14px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
   .filter-btn:hover { border-color:var(--text-muted); color:var(--text); }
@@ -298,7 +302,7 @@
   <!-- RANKING -->
   <div id="panel-ranking" class="panel active">
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
         <div class="card-title" style="margin-bottom:0">Pelaajien ranking</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap" id="ranking-filter">
           <button class="filter-btn active" onclick="setRankingFilter(0)">Kaikki</button>
@@ -307,6 +311,13 @@
           <button class="filter-btn" onclick="setRankingFilter(5)">5 pelaajaa</button>
           <button class="filter-btn" onclick="setRankingFilter(6)">6 pelaajaa</button>
         </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px" id="ranking-sort">
+        <button class="sort-btn" onclick="setRankingSort('avg')">⭐ Keskiarvo</button>
+        <button class="sort-btn" onclick="setRankingSort('best')">🏆 Paras tulos</button>
+        <button class="sort-btn active" onclick="setRankingSort('wins')">👑 Voitot</button>
+        <button class="sort-btn" onclick="setRankingSort('games')">🎲 Pelejä</button>
+        <button class="sort-btn" onclick="setRankingSort('winpct')">📈 Voitto%</button>
       </div>
       <div id="ranking-list" class="ranking-list"></div>
     </div>
@@ -478,6 +489,7 @@ const MAP_PRESETS = [...MAPS, ...RANDOM_PRESETS];
 // ============================================================
 let state = { players:[], games:[], isAdmin:false };
 let rankingFilter = 0;
+let rankingSort   = 'wins';
 let gamesFilter   = 0;
 let currentSeason = null;
 
@@ -617,6 +629,13 @@ function setRankingFilter(n) {
   renderRanking();
 }
 
+function setRankingSort(key) {
+  rankingSort = key;
+  document.querySelectorAll('#ranking-sort .sort-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === ['avg','best','wins','games','winpct'].indexOf(key)));
+  renderRanking();
+}
+
 function renderRanking() {
   const el = document.getElementById('ranking-list');
   const filtered = rankingFilter === 0 ? state.games
@@ -640,18 +659,50 @@ function renderRanking() {
       if(s.player === winner) stats[s.player].wins++;
     });
   });
+
+  const sortFns = {
+    avg:    (a,b) => b.avg - a.avg,
+    best:   (a,b) => b.best - a.best,
+    wins:   (a,b) => b.wins - a.wins || b.avg - a.avg,
+    games:  (a,b) => b.games - a.games || b.avg - a.avg,
+    winpct: (a,b) => b.winpct - a.winpct || b.avg - a.avg,
+  };
+
   const ranked = Object.entries(stats)
-    .map(([name,s]) => ({ name, avg: Math.round(s.total/s.games), ...s }))
-    .sort((a,b) => b.avg - a.avg);
-  el.innerHTML = ranked.map((p,i) => `
+    .map(([name,s]) => ({
+      name,
+      avg:    Math.round(s.total / s.games),
+      winpct: Math.round(s.wins / s.games * 100),
+      ...s
+    }))
+    .sort(sortFns[rankingSort] || sortFns.avg);
+
+  // Labels for highlighted stat per sort mode
+  const highlight = {
+    avg:    p => ({ val: p.avg,              lbl: 'ka' }),
+    best:   p => ({ val: p.best,             lbl: 'paras' }),
+    wins:   p => ({ val: p.wins,             lbl: 'voittoa' }),
+    games:  p => ({ val: p.games,            lbl: 'peliä' }),
+    winpct: p => ({ val: p.winpct + '%',     lbl: 'voitto%' }),
+  };
+
+  el.innerHTML = ranked.map((p,i) => {
+    const h = highlight[rankingSort](p);
+    return `
     <div class="rank-item rank-${i+1}" style="border-left:3px solid ${getPlayerColor(p.name)}">
       <div class="rank-num">${i+1}</div>
       <div style="width:34px;height:34px;border-radius:50%;background:${getPlayerColor(p.name)};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0">${p.name[0].toUpperCase()}</div>
       <div class="rank-name">${p.name}</div>
-      <div class="rank-stats"><span>${p.games} peliä</span><span>${p.wins} voittoa</span><span>Paras: ${p.best}</span></div>
+      <div class="rank-stats">
+        <span style="${rankingSort==='games'?'color:var(--text)':''}">${p.games} peliä</span>
+        <span style="${rankingSort==='wins'?'color:var(--text)':''}">${p.wins} voittoa</span>
+        <span style="${rankingSort==='winpct'?'color:var(--text)':''}">${p.winpct}% voitto</span>
+        <span style="${rankingSort==='best'?'color:var(--text)':''}">${p.best} paras</span>
+        <span style="${rankingSort==='avg'?'color:var(--text)':''}">${p.avg} ka</span>
+      </div>
       ${p.wins>0?`<span class="rank-badge">👑 ${p.wins}x</span>`:''}
-      <div class="rank-score">${p.avg}</div>
-    </div>`).join('');
+      <div class="rank-score" title="${h.lbl}">${h.val}</div>
+    </div>`; }).join('');
 }
 
 // ============================================================
