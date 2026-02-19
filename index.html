@@ -366,15 +366,9 @@
         <div class="exp-chip exp-colonies" id="exp-Colonies"  onclick="toggleExpansion('Colonies')">🛸 Colonies</div>
       </div>
 
-      <div class="card-title" style="margin-top:4px;">Kartta-asetukset</div>
-      <div class="map-type-row">
-        <div class="map-type-btn" id="map-btn-standard" onclick="selectMapType('standard')">🗺️ Peruskartta</div>
-        <div class="map-type-btn" id="map-btn-random"   onclick="selectMapType('random')">🎲 Random-kartta</div>
-      </div>
-      <div id="random-presets" style="display:none;">
-        <div class="field-label" style="margin-bottom:8px;">Random-kartan asetus</div>
-        <div class="random-preset-grid" id="preset-grid"></div>
-      </div>
+      <div class="card-title" style="margin-top:4px;">Kartta</div>
+      <div class="random-preset-grid" id="map-grid"></div>
+      <div id="random-presets" style="display:none;"></div>
 
       <div class="card-title" style="margin-top:4px;">Valitse pelaajat <span style="font-size:11px;color:var(--text-muted);font-family:'Exo 2',sans-serif;font-weight:400;letter-spacing:0;margin-left:6px;">— järjestys = aloitusjärjestys</span></div>
       <div id="player-select" class="players-row"></div>
@@ -458,14 +452,26 @@ const EXPANSIONS = [
   { key:'Turmoil',  label:'Turmoil',   icon:'🔥', cls:'exp-turmoil'  },
   { key:'Colonies', label:'Colonies',  icon:'🛸', cls:'exp-colonies' },
 ];
-const MAP_PRESETS = [
-  { key:'Default',          label:'Default',          icon:'🌍' },
-  { key:'FirstExplorers',   label:'First Explorers',  icon:'🔭' },
-  { key:'MartianDesert',    label:'Martian Desert',   icon:'🏜️' },
-  { key:'RichDeposits',     label:'Rich Deposits',    icon:'💎' },
-  { key:'FastTerraformers', label:'Fast Terraformers',icon:'⚡' },
-  { key:'JungleWorld',      label:'Jungle World',     icon:'🌴' },
+const MAPS = [
+  { key:'Standard',   label:'Peruskartta', icon:'🗺️' },
+  { key:'Hellas',     label:'Hellas',      icon:'🌋' },
+  { key:'Elysium',    label:'Elysium',     icon:'🏔️' },
+  { key:'Utopia',     label:'Utopia',      icon:'🌿' },
+  { key:'Cimmeria',   label:'Cimmeria',    icon:'❄️' },
+  { key:'Amazonis',   label:'Amazonis',    icon:'🌊' },
+  { key:'Vastitas',   label:'Vastitas',    icon:'🏜️' },
+  { key:'Random',     label:'Random-kartta', icon:'🎲' },
 ];
+const RANDOM_PRESETS = [
+  { key:'Default',          label:'Default',           icon:'🌍' },
+  { key:'FirstExplorers',   label:'First Explorers',   icon:'🔭' },
+  { key:'MartianDesert',    label:'Martian Desert',    icon:'🏜️' },
+  { key:'RichDeposits',     label:'Rich Deposits',     icon:'💎' },
+  { key:'FastTerraformers', label:'Fast Terraformers', icon:'⚡' },
+  { key:'JungleWorld',      label:'Jungle World',      icon:'🌴' },
+];
+// Keep MAP_PRESETS as alias for display lookups
+const MAP_PRESETS = [...MAPS, ...RANDOM_PRESETS];
 
 // ============================================================
 // STATE
@@ -478,8 +484,8 @@ let currentSeason = null;
 // Form state
 let formSelectedPlayers    = [];
 let formSelectedExpansions = [];
-let formMapType   = null;
-let formMapPreset = null;
+let formMap        = null; // key from MAPS
+let formMapPreset  = null; // key from RANDOM_PRESETS (only when formMap==='Random')
 
 // ============================================================
 // HELPERS
@@ -667,11 +673,11 @@ function buildGameCard(g, idPrefix='gc') {
     const exp = EXPANSIONS.find(x=>x.key===e);
     return exp ? `<span class="exp-tag exp-tag-${e.toLowerCase()}">${exp.icon} ${exp.label}</span>` : '';
   }).join('');
-  const mapTag = g.map_type==='standard'
-    ? `<span class="map-tag map-tag-standard">🗺️ Peruskartta</span>`
-    : g.map_type==='random'
-      ? `<span class="map-tag map-tag-random">🎲 Random${g.map_preset?': '+(MAP_PRESETS.find(p=>p.key===g.map_preset)?.label||g.map_preset):''}</span>`
-      : '';
+  const mapMain = MAPS.find(m=>m.key===g.map_type);
+  const mapSub  = RANDOM_PRESETS.find(p=>p.key===g.map_preset);
+  const mapTag  = mapMain
+    ? `<span class="map-tag map-tag-standard">${mapMain.icon} ${mapMain.label}${mapSub?' · '+mapSub.label:''}</span>`
+    : '';
   const genTag = g.generation
     ? `<span class="exp-tag" style="background:rgba(245,166,35,0.12);color:var(--gold);border:1px solid rgba(245,166,35,0.3);">🌍 Gen ${g.generation}</span>` : '';
   const adminBtns = state.isAdmin ? `
@@ -897,6 +903,29 @@ function renderAddForm() {
     const el = document.getElementById('exp-'+exp.key);
     if(el) el.classList.toggle('selected', formSelectedExpansions.includes(exp.key));
   });
+  // Render map grid
+  const mg = document.getElementById('map-grid');
+  if(mg) {
+    mg.innerHTML = MAPS.map(m=>`
+      <div class="preset-btn ${formMap===m.key?'selected':''}" onclick="selectMap('${m.key}')">
+        <span>${m.icon}</span><span>${m.label}</span>
+      </div>`).join('');
+  }
+  const rp = document.getElementById('random-presets');
+  if(rp) {
+    if(formMap === 'Random') {
+      rp.style.display = 'block';
+      rp.innerHTML = `<div class="field-label" style="margin:10px 0 8px">Random-kartan asetus</div>
+        <div class="random-preset-grid">
+          ${RANDOM_PRESETS.map(p=>`
+            <div class="preset-btn ${formMapPreset===p.key?'selected':''}" onclick="selectRandomPreset('${p.key}')">
+              <span>${p.icon}</span><span>${p.label}</span>
+            </div>`).join('')}
+        </div>`;
+    } else {
+      rp.style.display = 'none';
+    }
+  }
   const el = document.getElementById('player-select');
   if(!el) return;
   el.innerHTML = state.players.map(p => {
@@ -970,23 +999,16 @@ function toggleExpansion(key) {
   });
 }
 
-function selectMapType(type) {
-  formMapType = type; formMapPreset = null;
-  document.getElementById('map-btn-standard').className = 'map-type-btn'+(type==='standard'?' active-standard':'');
-  document.getElementById('map-btn-random').className   = 'map-type-btn'+(type==='random'?' active-random':'');
-  const pre = document.getElementById('random-presets');
-  if(type==='random') { pre.style.display='block'; renderPresets(); }
-  else pre.style.display='none';
+function selectMap(key) {
+  formMap = formMap === key ? null : key;
+  formMapPreset = null;
+  renderAddForm();
 }
 
-function renderPresets() {
-  document.getElementById('preset-grid').innerHTML = MAP_PRESETS.map(p=>`
-    <div class="preset-btn ${formMapPreset===p.key?'selected':''}" onclick="selectPreset('${p.key}')">
-      <span>${p.icon}</span><span>${p.label}</span>
-    </div>`).join('');
+function selectRandomPreset(key) {
+  formMapPreset = formMapPreset === key ? null : key;
+  renderAddForm();
 }
-
-function selectPreset(key) { formMapPreset=key; renderPresets(); }
 
 async function saveGame() {
   if(!formSelectedPlayers.length) { showToast('Valitse pelaajat!', 'error'); return; }
@@ -1000,8 +1022,8 @@ async function saveGame() {
   const { data: gameData, error: gameErr } = await sb.from('games').insert({
     game_num: nextNum, date, generation,
     expansions: formSelectedExpansions,
-    map_type: formMapType,
-    map_preset: formMapType==='random' ? formMapPreset : null,
+    map_type:   formMap,
+    map_preset: formMap === 'Random' ? formMapPreset : null,
   }).select().single();
 
   if(gameErr) { showToast('Virhe pelin tallentamisessa', 'error'); btn.disabled=false; return; }
@@ -1026,12 +1048,9 @@ async function saveGame() {
 
 function clearForm() {
   formSelectedPlayers = []; formSelectedExpansions = [];
-  formMapType = null; formMapPreset = null;
+  formMap = null; formMapPreset = null;
   const g = document.getElementById('inp-generation'); if(g) g.value='';
   const d = document.getElementById('inp-date'); if(d) d.value='';
-  const mapS = document.getElementById('map-btn-standard'); if(mapS) mapS.className='map-type-btn';
-  const mapR = document.getElementById('map-btn-random');   if(mapR) mapR.className='map-type-btn';
-  const rp = document.getElementById('random-presets'); if(rp) rp.style.display='none';
   renderAddForm();
 }
 
@@ -1065,15 +1084,17 @@ function editGame(id) {
       </div>
     </div>
     <div style="margin-bottom:14px">
-      <div class="field-label" style="margin-bottom:8px">Kartta-asetukset</div>
-      <div class="map-type-row">
-        <div class="map-type-btn ${g.map_type==='standard'?'active-standard':''}" id="edit-map-std" onclick="selectEditMap('standard')">🗺️ Peruskartta</div>
-        <div class="map-type-btn ${g.map_type==='random'?'active-random':''}"     id="edit-map-rnd" onclick="selectEditMap('random')">🎲 Random-kartta</div>
+      <div class="field-label" style="margin-bottom:8px">Kartta</div>
+      <div class="random-preset-grid">
+        ${MAPS.map(m=>`
+          <div class="preset-btn ${g.map_type===m.key?'selected':''}" id="edit-map-${m.key}" onclick="selectEditMap('${m.key}')">
+            <span>${m.icon}</span><span>${m.label}</span>
+          </div>`).join('')}
       </div>
-      <div id="edit-random-presets" style="${g.map_type==='random'?'':'display:none'}">
+      <div id="edit-random-presets" style="${g.map_type==='Random'?'margin-top:10px':'display:none;margin-top:10px'}">
         <div class="field-label" style="margin-bottom:8px">Random-kartan asetus</div>
         <div class="random-preset-grid">
-          ${MAP_PRESETS.map(p=>`
+          ${RANDOM_PRESETS.map(p=>`
             <div class="preset-btn ${g.map_preset===p.key?'selected':''}" id="edit-preset-${p.key}" onclick="selectEditPreset('${p.key}')">
               <span>${p.icon}</span><span>${p.label}</span>
             </div>`).join('')}
@@ -1102,12 +1123,14 @@ function editGame(id) {
   document.getElementById('edit-modal').classList.add('show');
 }
 
-function selectEditMap(type) {
-  document.getElementById('edit-map-std').className = 'map-type-btn'+(type==='standard'?' active-standard':'');
-  document.getElementById('edit-map-rnd').className = 'map-type-btn'+(type==='random'?' active-random':'');
-  document.getElementById('edit-random-presets').style.display = type==='random' ? 'block' : 'none';
-  if(type!=='random') document.querySelectorAll('[id^="edit-preset-"]').forEach(el=>el.classList.remove('selected'));
+function selectEditMap(key) {
+  document.querySelectorAll('[id^="edit-map-"]').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('edit-map-'+key)?.classList.add('selected');
+  const rp = document.getElementById('edit-random-presets');
+  if(rp) rp.style.display = key==='Random' ? 'block' : 'none';
+  if(key!=='Random') document.querySelectorAll('[id^="edit-preset-"]').forEach(el=>el.classList.remove('selected'));
 }
+
 function selectEditPreset(key) {
   document.querySelectorAll('[id^="edit-preset-"]').forEach(el=>el.classList.remove('selected'));
   document.getElementById('edit-preset-'+key)?.classList.add('selected');
@@ -1127,10 +1150,8 @@ async function saveEdit() {
     game_num:   parseInt(document.getElementById('edit-gamenum').value) || g.game_num,
     generation: parseInt(document.getElementById('edit-generation').value) || null,
     expansions: EXPANSIONS.filter(exp=>document.getElementById('edit-exp-'+exp.key)?.classList.contains('selected')).map(e=>e.key),
-    map_type:   document.getElementById('edit-map-rnd')?.classList.contains('active-random') ? 'random'
-              : document.getElementById('edit-map-std')?.classList.contains('active-standard') ? 'standard' : null,
-    map_preset: document.getElementById('edit-map-rnd')?.classList.contains('active-random')
-              ? (MAP_PRESETS.find(p=>document.getElementById('edit-preset-'+p.key)?.classList.contains('selected'))?.key||null) : null,
+    map_type:   MAPS.find(m=>document.getElementById('edit-map-'+m.key)?.classList.contains('selected'))?.key || null,
+    map_preset: RANDOM_PRESETS.find(p=>document.getElementById('edit-preset-'+p.key)?.classList.contains('selected'))?.key || null,
   }).eq('id', editingId);
   if(gameErr) { showToast('Virhe tallentamisessa', 'error'); return; }
 
