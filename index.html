@@ -247,6 +247,54 @@
   .season-stat-val { font-family:'Orbitron',monospace; font-size:20px; font-weight:700; color:var(--mars2); }
   .season-stat-lbl { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
 
+  /* ---- PLAYER PROFILE ---- */
+  .player-selector { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+  .player-select-btn {
+    display:flex; align-items:center; gap:8px;
+    padding:8px 16px; background:var(--surface2);
+    border:1px solid var(--border); border-radius:20px;
+    font-family:'Exo 2',sans-serif; font-size:13px; font-weight:600;
+    color:var(--text-muted); cursor:pointer; transition:all 0.2s;
+  }
+  .player-select-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .player-select-btn.active { color:white; border-color:transparent; box-shadow:0 2px 10px rgba(0,0,0,0.3); }
+  .player-avatar-lg {
+    width:56px; height:56px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:24px; font-weight:700; color:white; flex-shrink:0;
+  }
+  .profile-header {
+    display:flex; align-items:center; gap:18px;
+    margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--border);
+  }
+  .profile-name { font-family:'Orbitron',monospace; font-size:20px; font-weight:700; }
+  .profile-sub  { font-size:13px; color:var(--text-muted); margin-top:3px; }
+  .profile-stats-grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:12px;
+    margin-bottom:22px;
+  }
+  .profile-stat {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:12px; padding:14px; text-align:center;
+  }
+  .profile-stat-val {
+    font-family:'Orbitron',monospace; font-size:22px; font-weight:700; color:var(--mars2);
+  }
+  .profile-stat-val.gold   { color:var(--gold); }
+  .profile-stat-val.silver { color:#b0b8c8; }
+  .profile-stat-val.bronze { color:#cd7f32; }
+  .profile-stat-lbl { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+  .cat-avg-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .cat-avg-name { font-size:13px; width:130px; flex-shrink:0; }
+  .cat-avg-bar-track { flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden; }
+  .cat-avg-bar-fill  { height:100%; border-radius:4px; }
+  .cat-avg-val { font-size:12px; font-family:'Orbitron',monospace; color:var(--mars2); width:38px; text-align:right; flex-shrink:0; }
+  .recent-game-row {
+    display:flex; align-items:center; gap:12px;
+    padding:9px 0; border-bottom:1px solid rgba(30,42,69,0.5); font-size:13px;
+  }
+  .recent-game-row:last-child { border-bottom:none; }
+
   /* ---- SCORE ENTRY ---- */
   .player-score-block { margin-bottom:18px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:15px; }
 
@@ -295,7 +343,8 @@
     <button class="tab active" onclick="showTab('ranking')">🏆 Ranking</button>
     <button class="tab" onclick="showTab('games')">🎲 Pelit</button>
     <button class="tab" onclick="showTab('season')">🌍 Season</button>
-    <button class="tab" onclick="showTab('categories')">📊 Kategoriat</button>
+    <button class="tab" onclick="showTab('players')">👤 Pelaajat</button>
+    <button class="tab" onclick="showTab('categories')">📊 Statistiikkaa</button>
     <button class="tab admin-only" id="tab-add" onclick="showTab('add')">➕ Lisää peli</button>
   </div>
 
@@ -347,7 +396,12 @@
     <div id="season-content"></div>
   </div>
 
-  <!-- CATEGORIES -->
+  <!-- PLAYERS -->
+  <div id="panel-players" class="panel">
+    <div id="players-content"></div>
+  </div>
+
+  <!-- CATEGORIES / STATISTIIKKAA -->
   <div id="panel-categories" class="panel">
     <div id="cat-sections"></div>
   </div>
@@ -601,6 +655,7 @@ async function refreshAndRender() {
   if(name === 'ranking')    renderRanking();
   if(name === 'games')      renderGames();
   if(name === 'season')     renderSeason();
+  if(name === 'players')    renderPlayers();
   if(name === 'categories') renderCategories();
   if(name === 'add')        renderAddForm();
 }
@@ -610,13 +665,14 @@ async function refreshAndRender() {
 // ============================================================
 function showTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', ['ranking','games','season','categories','add'][i] === name);
+    t.classList.toggle('active', ['ranking','games','season','players','categories','add'][i] === name);
   });
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
   if(name === 'ranking')    renderRanking();
   if(name === 'games')      renderGames();
   if(name === 'season')     renderSeason();
+  if(name === 'players')    renderPlayers();
   if(name === 'categories') renderCategories();
   if(name === 'add')        renderAddForm();
 }
@@ -978,6 +1034,167 @@ function renderSeason() {
 }
 
 function selectSeason(key) { currentSeason=key; renderSeason(); }
+
+// ============================================================
+// PLAYERS
+// ============================================================
+let selectedPlayer = null;
+
+function renderPlayers() {
+  const el = document.getElementById('players-content');
+  if(!state.players.length) {
+    el.innerHTML = '<div class="card"><div class="empty"><div class="empty-icon">👤</div><div class="empty-text">Ei pelaajia vielä.</div></div></div>';
+    return;
+  }
+  // Default to first player
+  if(!selectedPlayer || !state.players.find(p=>(p.name||p)===selectedPlayer))
+    selectedPlayer = state.players[0].name || state.players[0];
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title" style="margin-bottom:14px">Valitse pelaaja</div>
+      <div class="player-selector">
+        ${state.players.map(p => {
+          const name = p.name || p;
+          const color = getPlayerColor(name);
+          return `<button class="player-select-btn ${name===selectedPlayer?'active':''}"
+            style="${name===selectedPlayer?`background:${color}`:''}"
+            onclick="selectPlayer('${name}')">
+            <div style="width:22px;height:22px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0">${name[0].toUpperCase()}</div>
+            ${name}
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
+    <div id="player-profile"></div>`;
+
+  renderPlayerProfile();
+}
+
+function selectPlayer(name) {
+  selectedPlayer = name;
+  renderPlayers();
+}
+
+function renderPlayerProfile() {
+  const el = document.getElementById('player-profile');
+  if(!el || !selectedPlayer) return;
+
+  const name   = selectedPlayer;
+  const color  = getPlayerColor(name);
+  const games  = state.games.filter(g => (g.scores||[]).some(s=>s.player===name));
+  const scores = games.map(g => {
+    const s = g.scores.find(x=>x.player===name);
+    const sorted = [...g.scores].sort((a,b)=>(b.total||0)-(a.total||0));
+    const pos = sorted.findIndex(x=>x.player===name);
+    return { ...s, date:g.date, gameNum:g.game_num, pos, playerCount:g.scores.length };
+  });
+
+  if(!scores.length) {
+    el.innerHTML = `<div class="card"><div class="empty"><div class="empty-icon">🎲</div><div class="empty-text">Ei pelejä vielä.</div></div></div>`;
+    return;
+  }
+
+  // Core stats
+  const totalGames = scores.length;
+  const wins       = scores.filter(s=>s.pos===0).length;
+  const seconds    = scores.filter(s=>s.pos===1).length;
+  const thirds     = scores.filter(s=>s.pos===2).length;
+  const winPct     = Math.round(wins/totalGames*100);
+  const avgTotal   = Math.round(scores.reduce((a,s)=>a+(s.total||0),0)/totalGames);
+  const bestTotal  = Math.max(...scores.map(s=>s.total||0));
+  const worstTotal = Math.min(...scores.map(s=>s.total||0));
+  const avgPos     = (scores.reduce((a,s)=>a+s.pos,0)/totalGames+1).toFixed(1);
+
+  // Category averages
+  const cats = SCORE_FIELDS.filter(f=>f.key!=='total');
+  const catAvgs = cats.map(f => {
+    const vals = scores.map(s=>s[f.key]||0);
+    return { ...f, avg: vals.reduce((a,b)=>a+b,0)/vals.length };
+  });
+  const catMax = Math.max(...catAvgs.map(c=>c.avg), 1);
+
+  // Recent games (last 8)
+  const recent = [...scores].sort((a,b) => {
+    if(!a.date && !b.date) return b.gameNum - a.gameNum;
+    if(!a.date) return 1;
+    if(!b.date) return -1;
+    return new Date(b.date) - new Date(a.date);
+  }).slice(0, 8);
+
+  const podiumEmoji = ['🥇','🥈','🥉'];
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <div class="profile-header">
+        <div class="player-avatar-lg" style="background:${color}">${name[0].toUpperCase()}</div>
+        <div>
+          <div class="profile-name">${name}</div>
+          <div class="profile-sub">${totalGames} peliä · ${winPct}% voittoprosentti · Keskisijoitus ${avgPos}</div>
+        </div>
+      </div>
+      <div class="profile-stats-grid">
+        <div class="profile-stat">
+          <div class="profile-stat-val">${totalGames}</div>
+          <div class="profile-stat-lbl">Pelejä</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val gold">${wins}</div>
+          <div class="profile-stat-lbl">🥇 Voittoa</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val silver">${seconds}</div>
+          <div class="profile-stat-lbl">🥈 Toinen sija</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val bronze">${thirds}</div>
+          <div class="profile-stat-lbl">🥉 Kolmas sija</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${winPct}%</div>
+          <div class="profile-stat-lbl">Voitto%</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${avgTotal}</div>
+          <div class="profile-stat-lbl">Keskiarvo</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val" style="color:var(--green)">${bestTotal}</div>
+          <div class="profile-stat-lbl">Paras tulos</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val" style="color:var(--text-muted)">${worstTotal}</div>
+          <div class="profile-stat-lbl">Heikoin tulos</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-title">Kategoriakeskiarvot</div>
+      ${catAvgs.map(c=>`
+        <div class="cat-avg-row">
+          <div class="cat-avg-name">${c.icon} ${c.label}</div>
+          <div class="cat-avg-bar-track">
+            <div class="cat-avg-bar-fill" style="width:${(c.avg/catMax*100).toFixed(1)}%;background:${color}"></div>
+          </div>
+          <div class="cat-avg-val">${c.avg.toFixed(1)}</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Viimeisimmät pelit</div>
+      ${recent.map(s=>`
+        <div class="recent-game-row">
+          <span style="font-family:'Orbitron',monospace;font-size:11px;color:var(--text-muted);min-width:60px">
+            #${s.gameNum}
+          </span>
+          <span style="color:var(--text-muted);min-width:80px;font-size:12px">${s.date||'—'}</span>
+          <span style="font-size:16px">${podiumEmoji[s.pos]||`${s.pos+1}.`}</span>
+          <span style="color:var(--text-muted);font-size:12px">/${s.playerCount} pelaajaa</span>
+          <span style="margin-left:auto;font-family:'Orbitron',monospace;font-size:16px;font-weight:700;color:var(--mars2)">${s.total}</span>
+        </div>`).join('')}
+    </div>`;
+}
 
 // ============================================================
 // CATEGORIES
