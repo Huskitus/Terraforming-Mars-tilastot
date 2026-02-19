@@ -827,6 +827,62 @@ function getAllSeasons() {
   return [...seen.values()].sort((a,b) => a.year!==b.year ? a.year-b.year : a.type==='spring'?-1:1);
 }
 
+let seasonSort = 'wins';
+
+function setSeasonSort(key) {
+  seasonSort = key;
+  const keys = ['avg','best','wins','second','third','games','winpct'];
+  document.querySelectorAll('#season-sort .sort-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === keys.indexOf(key)));
+  renderSeasonRanking();
+}
+
+function renderSeasonRanking() {
+  const el = document.getElementById('season-ranking-list');
+  if(!el || !window._seasonRanked) return;
+
+  const sortFns = {
+    avg:    (a,b) => b.avg - a.avg,
+    best:   (a,b) => b.best - a.best,
+    wins:   (a,b) => b.wins - a.wins || b.avg - a.avg,
+    second: (a,b) => b.second - a.second || b.avg - a.avg,
+    third:  (a,b) => b.third - a.third || b.avg - a.avg,
+    games:  (a,b) => b.games - a.games || b.avg - a.avg,
+    winpct: (a,b) => b.winpct - a.winpct || b.avg - a.avg,
+  };
+  const highlight = {
+    avg:    p => ({ val: p.avg,          lbl: 'ka' }),
+    best:   p => ({ val: p.best,         lbl: 'paras' }),
+    wins:   p => ({ val: p.wins,         lbl: 'voittoa' }),
+    second: p => ({ val: p.second,       lbl: '2. sijaa' }),
+    third:  p => ({ val: p.third,        lbl: '3. sijaa' }),
+    games:  p => ({ val: p.games,        lbl: 'peliä' }),
+    winpct: p => ({ val: p.winpct + '%', lbl: 'voitto%' }),
+  };
+
+  const sorted = [...window._seasonRanked].sort(sortFns[seasonSort] || sortFns.wins);
+
+  el.innerHTML = sorted.map((p,i) => {
+    const h = highlight[seasonSort](p);
+    return `
+      <div class="rank-item rank-${i+1}" style="border-left:3px solid ${getPlayerColor(p.name)}">
+        <div class="rank-num">${i+1}</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:${getPlayerColor(p.name)};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;flex-shrink:0">${p.name[0].toUpperCase()}</div>
+        <div class="rank-name">${p.name}</div>
+        <div class="rank-stats">
+          <span style="${seasonSort==='games'?'color:var(--text)':''}">${p.games} peliä</span>
+          <span style="${seasonSort==='wins'?'color:var(--gold)':'color:#b0b8c8'}" title="Voitot">🥇 ${p.wins}</span>
+          <span style="${seasonSort==='second'?'color:var(--text)':'color:#b0b8c8'}" title="Toiset sijat">🥈 ${p.second}</span>
+          <span style="${seasonSort==='third'?'color:var(--text)':'color:#b0b8c8'}" title="Kolmannet sijat">🥉 ${p.third}</span>
+          <span style="${seasonSort==='winpct'?'color:var(--text)':''}">${p.winpct}%</span>
+          <span style="${seasonSort==='best'?'color:var(--text)':''}">↑${p.best}</span>
+          <span style="${seasonSort==='avg'?'color:var(--text)':''}">⌀${p.avg}</span>
+        </div>
+        <div class="rank-score" title="${h.lbl}">${h.val}</div>
+      </div>`;
+  }).join('');
+}
+
 function renderSeason() {
   const el = document.getElementById('season-content');
   const seasons = getAllSeasons();
@@ -838,26 +894,36 @@ function renderSeason() {
     currentSeason = seasons[seasons.length-1].key;
   const season = seasons.find(s=>s.key===currentSeason);
   const seasonGames = state.games.filter(g => { const s=getSeasonFromDate(g.date); return s&&s.key===currentSeason; });
+
   const stats = {};
   seasonGames.forEach(g => {
     const scores = g.scores||[];
-    const max = Math.max(...scores.map(s=>s.total||0));
-    const winner = scores.find(s=>s.total===max)?.player;
+    const sorted = [...scores].sort((a,b)=>(b.total||0)-(a.total||0));
     scores.forEach(s => {
-      if(!stats[s.player]) stats[s.player]={wins:0,games:0,total:0,best:0};
+      if(!stats[s.player]) stats[s.player]={wins:0,second:0,third:0,games:0,total:0,best:0};
       stats[s.player].games++;
       stats[s.player].total += s.total||0;
       if((s.total||0)>stats[s.player].best) stats[s.player].best=s.total;
-      if(s.player===winner) stats[s.player].wins++;
+      const pos = sorted.findIndex(x=>x.player===s.player);
+      if(pos===0) stats[s.player].wins++;
+      else if(pos===1) stats[s.player].second++;
+      else if(pos===2) stats[s.player].third++;
     });
   });
-  const ranked = Object.entries(stats)
-    .map(([name,s])=>({name,avg:Math.round(s.total/s.games),...s}))
-    .sort((a,b)=>b.avg-a.avg);
-  const champion  = ranked[0];
-  const highScore = ranked.reduce((m,p)=>p.best>m?p.best:m,0);
-  const avgScore  = ranked.length ? Math.round(ranked.reduce((a,p)=>a+p.avg,0)/ranked.length) : 0;
-  const mostWins  = ranked.reduce((b,p)=>p.wins>(b?.wins||0)?p:b,null);
+
+  window._seasonRanked = Object.entries(stats)
+    .map(([name,s])=>({
+      name,
+      avg:    Math.round(s.total/s.games),
+      winpct: Math.round(s.wins/s.games*100),
+      ...s
+    }))
+    .sort((a,b)=>b.wins-a.wins||b.avg-a.avg);
+
+  const champion  = window._seasonRanked[0];
+  const highScore = window._seasonRanked.reduce((m,p)=>p.best>m?p.best:m,0);
+  const avgScore  = window._seasonRanked.length ? Math.round(window._seasonRanked.reduce((a,p)=>a+p.avg,0)/window._seasonRanked.length) : 0;
+  const mostWins  = window._seasonRanked[0];
 
   el.innerHTML = `
     <div class="season-selector">
@@ -882,30 +948,33 @@ function renderSeason() {
       </div>
       <div class="season-stats-row">
         <div class="season-stat"><div class="season-stat-val">${seasonGames.length}</div><div class="season-stat-lbl">Pelejä</div></div>
-        <div class="season-stat"><div class="season-stat-val">${ranked.length}</div><div class="season-stat-lbl">Pelaajaa</div></div>
+        <div class="season-stat"><div class="season-stat-val">${window._seasonRanked.length}</div><div class="season-stat-lbl">Pelaajaa</div></div>
         <div class="season-stat"><div class="season-stat-val">${highScore}</div><div class="season-stat-lbl">Huipputulos</div></div>
         <div class="season-stat"><div class="season-stat-val">${avgScore}</div><div class="season-stat-lbl">Ka pisteet</div></div>
         ${mostWins?`<div class="season-stat"><div class="season-stat-val" style="font-size:14px">${mostWins.name}</div><div class="season-stat-lbl">Eniten voittoja (${mostWins.wins})</div></div>`:''}
       </div>
     </div>
     <div class="card" style="margin-bottom:18px">
-      <div class="card-title">Season ranking</div>
-      <div class="ranking-list">
-        ${ranked.map((p,i)=>`
-          <div class="rank-item rank-${i+1}" style="border-left:3px solid ${getPlayerColor(p.name)}">
-            <div class="rank-num">${i+1}</div>
-            <div style="width:32px;height:32px;border-radius:50%;background:${getPlayerColor(p.name)};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;flex-shrink:0">${p.name[0].toUpperCase()}</div>
-            <div class="rank-name">${p.name}</div>
-            <div class="rank-stats"><span>${p.games} peliä</span><span>${p.wins} voittoa</span><span>Paras: ${p.best}</span></div>
-            ${p.wins>0?`<span class="rank-badge">👑 ${p.wins}x</span>`:''}
-            <div class="rank-score">${p.avg}</div>
-          </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">Season ranking</div>
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px" id="season-sort">
+        <button class="sort-btn" onclick="setSeasonSort('avg')">⭐ Keskiarvo</button>
+        <button class="sort-btn" onclick="setSeasonSort('best')">🏆 Paras tulos</button>
+        <button class="sort-btn active" onclick="setSeasonSort('wins')">🥇 Voitot</button>
+        <button class="sort-btn" onclick="setSeasonSort('second')">🥈 Toinen sija</button>
+        <button class="sort-btn" onclick="setSeasonSort('third')">🥉 Kolmas sija</button>
+        <button class="sort-btn" onclick="setSeasonSort('games')">🎲 Pelejä</button>
+        <button class="sort-btn" onclick="setSeasonSort('winpct')">📈 Voitto%</button>
+      </div>
+      <div class="ranking-list" id="season-ranking-list"></div>
     </div>
     <div class="card">
       <div class="card-title">${season.type==='spring'?'Kevät':'Syksy'} '${String(season.year).padStart(2,'0')} pelit</div>
       <div class="games-list">${[...seasonGames].reverse().map(g=>buildGameCard(g,'sg')).join('')}</div>
     </div>`;
+
+  renderSeasonRanking();
 }
 
 function selectSeason(key) { currentSeason=key; renderSeason(); }
