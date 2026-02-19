@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraforming Mars — Tulosseuranta</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0d14;
+    --surface: #111520;
+    --surface2: #161c2e;
+    --border: #1e2a45;
+    --mars: #c0440a;
+    --mars2: #e85d1a;
+    --gold: #f5a623;
+    --green: #2ecc71;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --text: #e8eaf0;
+    --text-muted: #6b7a99;
+    --glow: rgba(192,68,10,0.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+      radial-gradient(1px 1px at 25% 45%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 40% 20%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 55% 70%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(1px 1px at 70% 35%, rgba(255,255,255,0.6) 0%, transparent 100%),
+      radial-gradient(1px 1px at 85% 60%, rgba(255,255,255,0.4) 0%, transparent 100%),
+      radial-gradient(1px 1px at 92% 10%, rgba(255,255,255,0.5) 0%, transparent 100%),
+      radial-gradient(1px 1px at 5%  80%, rgba(255,255,255,0.3) 0%, transparent 100%),
+      radial-gradient(2px 2px at 20% 55%, rgba(255,200,150,0.4) 0%, transparent 100%),
+      radial-gradient(150px 150px at 80% 20%, rgba(192,68,10,0.08) 0%, transparent 100%);
+    pointer-events:none;
+    z-index:0;
+  }
+  .app { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:0 20px 60px; }
+
+  /* ---- HEADER ---- */
+  header { text-align:center; padding:40px 0 30px; position:relative; }
+  header::after { content:''; display:block; width:200px; height:2px; background:linear-gradient(90deg,transparent,var(--mars),transparent); margin:16px auto 0; }
+  .logo { font-family:'Orbitron',monospace; font-size:clamp(20px,5vw,38px); font-weight:900; letter-spacing:3px; background:linear-gradient(135deg,var(--mars2),var(--gold)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; text-transform:uppercase; }
+  .logo-sub { font-family:'Orbitron',monospace; font-size:11px; letter-spacing:6px; color:var(--text-muted); text-transform:uppercase; margin-top:4px; }
+  .planet { width:60px; height:60px; background:radial-gradient(circle at 35% 35%,#e87a3a,#c0440a 50%,#6b1a02); border-radius:50%; margin:0 auto 14px; box-shadow:0 0 40px var(--glow),inset -10px -10px 20px rgba(0,0,0,0.5); animation:pulse 4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 40px var(--glow)} 50%{box-shadow:0 0 70px rgba(232,93,26,0.5)} }
+
+  /* ---- AUTH BAR ---- */
+  .auth-bar {
+    display:flex; align-items:center; justify-content:flex-end;
+    gap:10px; margin-bottom:12px; font-size:13px;
+  }
+  .auth-status { color:var(--text-muted); }
+  .auth-status.logged-in { color:var(--green); }
+  .btn-auth {
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--text-muted); padding:6px 14px; border-radius:8px;
+    font-family:'Exo 2',sans-serif; font-size:12px; font-weight:600;
+    cursor:pointer; transition:all 0.2s;
+  }
+  .btn-auth:hover { border-color:var(--text-muted); color:var(--text); }
+  .btn-auth.logout { border-color:rgba(192,68,10,0.4); color:var(--mars2); }
+
+  /* ---- LOGIN MODAL ---- */
+  .login-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.8);
+    z-index:300; display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity 0.2s; padding:20px;
+  }
+  .login-overlay.show { opacity:1; pointer-events:all; }
+  .login-box {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:32px; width:100%; max-width:380px;
+    transform:translateY(20px); transition:transform 0.2s;
+  }
+  .login-overlay.show .login-box { transform:translateY(0); }
+  .login-title { font-family:'Orbitron',monospace; font-size:16px; letter-spacing:2px; color:var(--mars2); text-transform:uppercase; margin-bottom:20px; }
+  .login-error { color:#e74c3c; font-size:13px; margin-top:8px; min-height:18px; }
+
+  /* ---- TABS ---- */
+  .tabs { display:flex; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:4px; margin-bottom:24px; flex-wrap:wrap; }
+  .tab { flex:1; min-width:100px; padding:9px 14px; background:transparent; border:none; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:12px; font-weight:600; letter-spacing:0.5px; cursor:pointer; border-radius:9px; transition:all 0.2s; text-transform:uppercase; }
+  .tab:hover { color:var(--text); background:var(--surface2); }
+  .tab.active { background:linear-gradient(135deg,var(--mars),#8b2500); color:white; box-shadow:0 2px 12px var(--glow); }
+  .tab.admin-only { display:none; }
+  .tab.admin-only.visible { display:block; }
+
+  /* ---- PANELS ---- */
+  .panel { display:none; animation:fadeIn 0.3s ease; }
+  .panel.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ---- LOADING ---- */
+  .loading {
+    display:flex; align-items:center; justify-content:center;
+    gap:10px; padding:60px; color:var(--text-muted); font-size:14px;
+  }
+  .spinner {
+    width:20px; height:20px; border:2px solid var(--border);
+    border-top-color:var(--mars2); border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ---- CARDS ---- */
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:20px; }
+  .card-title { font-family:'Orbitron',monospace; font-size:13px; letter-spacing:2px; color:var(--mars2); text-transform:uppercase; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+  .card-title::before { content:''; display:inline-block; width:4px; height:16px; background:var(--mars2); border-radius:2px; }
+
+  /* ---- FORM ---- */
+  .form-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px; margin-bottom:16px; }
+  .field-group { display:flex; flex-direction:column; gap:4px; }
+  .field-label { font-size:11px; font-weight:600; letter-spacing:0.5px; color:var(--text-muted); text-transform:uppercase; }
+  .field-input { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; color:var(--text); font-family:'Exo 2',sans-serif; font-size:14px; transition:border-color 0.2s; outline:none; width:100%; }
+  .field-input:focus { border-color:var(--mars); box-shadow:0 0 0 2px rgba(192,68,10,0.2); }
+
+  /* ---- BUTTONS ---- */
+  .btn { background:linear-gradient(135deg,var(--mars),#8b2500); color:white; border:none; border-radius:10px; padding:11px 24px; font-family:'Orbitron',monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.2s; box-shadow:0 4px 15px var(--glow); }
+  .btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px var(--glow); }
+  .btn:active { transform:translateY(0); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+  .btn-secondary { background:var(--surface2); box-shadow:none; border:1px solid var(--border); color:var(--text); }
+  .btn-secondary:hover { background:var(--border); box-shadow:none; }
+  .btn-danger { background:linear-gradient(135deg,#c0392b,#7b1a14); }
+  .flex { display:flex; }
+  .gap-2 { gap:8px; }
+  .mt-3 { margin-top:12px; }
+
+  /* ---- FILTER BUTTONS ---- */
+  .filter-btn { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:6px 14px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .filter-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .filter-btn.active { background:linear-gradient(135deg,var(--mars),#8b2500); border-color:var(--mars); color:white; box-shadow:0 2px 8px var(--glow); }
+
+  /* ---- PLAYER CHIPS ---- */
+  .players-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .player-chip { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:6px 14px; font-size:13px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px; user-select:none; }
+  .player-chip.selected { background:linear-gradient(135deg,var(--mars),#8b2500); border-color:var(--mars); color:white; }
+  .player-chip .dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+
+  /* ---- EXPANSION CHIPS ---- */
+  .expansion-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+  .exp-chip { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:7px 16px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:7px; user-select:none; }
+  .exp-chip:hover { border-color:var(--text-muted); }
+  .exp-chip.exp-prelude.selected  { background:linear-gradient(135deg,#1a6b3a,#0e3d22); border-color:#2ecc71; color:#7fffc4; }
+  .exp-chip.exp-venus.selected    { background:linear-gradient(135deg,#4a2080,#28104a); border-color:#8b5cf6; color:#c4b5fd; }
+  .exp-chip.exp-turmoil.selected  { background:linear-gradient(135deg,#8b2500,#4a1200); border-color:var(--mars2); color:#ffb894; }
+  .exp-chip.exp-colonies.selected { background:linear-gradient(135deg,#1a4a6b,#0a2538); border-color:#3b82f6; color:#93c5fd; }
+
+  /* ---- TAGS ---- */
+  .exp-tag { font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; letter-spacing:0.5px; text-transform:uppercase; }
+  .exp-tag-prelude  { background:rgba(46,204,113,0.15); color:#2ecc71; border:1px solid rgba(46,204,113,0.3); }
+  .exp-tag-venus    { background:rgba(139,92,246,0.15); color:#8b5cf6; border:1px solid rgba(139,92,246,0.3); }
+  .exp-tag-turmoil  { background:rgba(232,93,26,0.15); color:var(--mars2); border:1px solid rgba(232,93,26,0.3); }
+  .exp-tag-colonies { background:rgba(59,130,246,0.15); color:#3b82f6; border:1px solid rgba(59,130,246,0.3); }
+  .map-tag { font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; letter-spacing:0.5px; text-transform:uppercase; }
+  .map-tag-standard { background:rgba(59,130,246,0.15); color:#3b82f6; border:1px solid rgba(59,130,246,0.3); }
+  .map-tag-random   { background:rgba(139,92,246,0.15); color:#8b5cf6; border:1px solid rgba(139,92,246,0.3); }
+
+  /* ---- MAP SELECTOR ---- */
+  .map-type-row { display:flex; gap:8px; margin-bottom:14px; }
+  .map-type-btn { flex:1; padding:11px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; text-align:center; user-select:none; }
+  .map-type-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .map-type-btn.active-standard { background:linear-gradient(135deg,#1a3a6b,#0a1f3d); border-color:#3b82f6; color:#93c5fd; }
+  .map-type-btn.active-random   { background:linear-gradient(135deg,#2a1a6b,#160a3d); border-color:#8b5cf6; color:#c4b5fd; }
+  .random-preset-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:8px; animation:fadeIn 0.2s; }
+  .preset-btn { padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; text-align:left; user-select:none; display:flex; align-items:center; gap:8px; }
+  .preset-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .preset-btn.selected { background:linear-gradient(135deg,#2a1a6b,#160a3d); border-color:#8b5cf6; color:#c4b5fd; }
+
+  /* ---- RANKING ---- */
+  .ranking-list { display:flex; flex-direction:column; gap:10px; }
+  .rank-item { display:flex; align-items:center; gap:14px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:13px 16px; transition:transform 0.2s; }
+  .rank-item:hover { transform:translateX(4px); }
+  .rank-num { font-family:'Orbitron',monospace; font-size:18px; font-weight:900; width:30px; text-align:center; }
+  .rank-1 .rank-num { color:var(--gold); }
+  .rank-2 .rank-num { color:#b0b8c8; }
+  .rank-3 .rank-num { color:#cd7f32; }
+  .rank-name { font-size:15px; font-weight:600; flex:1; }
+  .rank-stats { display:flex; gap:14px; font-size:12px; color:var(--text-muted); }
+  .rank-score { font-family:'Orbitron',monospace; font-size:20px; font-weight:700; color:var(--mars2); min-width:55px; text-align:right; }
+  .rank-badge { font-size:11px; background:rgba(192,68,10,0.2); border:1px solid rgba(192,68,10,0.4); color:var(--mars2); padding:2px 8px; border-radius:10px; }
+
+  /* ---- GAMES LIST ---- */
+  .games-list { display:flex; flex-direction:column; gap:10px; }
+  .game-card { background:var(--surface2); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  .game-header { display:flex; align-items:center; justify-content:space-between; padding:13px 16px; cursor:pointer; user-select:none; transition:background 0.2s; }
+  .game-header:hover { background:rgba(255,255,255,0.03); }
+  .game-header-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .game-num { font-family:'Orbitron',monospace; font-size:11px; color:var(--text-muted); letter-spacing:1px; }
+  .game-date { font-size:12px; color:var(--text-muted); }
+  .game-players { font-weight:600; font-size:14px; }
+  .game-winner { color:var(--gold); font-size:13px; }
+  .game-expand { color:var(--text-muted); font-size:16px; transition:transform 0.2s; flex-shrink:0; }
+  .game-card.open .game-expand { transform:rotate(180deg); }
+  .game-details { display:none; padding:0 16px 16px; overflow-x:auto; }
+  .game-card.open .game-details { display:block; }
+  .score-table { width:100%; border-collapse:collapse; font-size:12px; min-width:550px; }
+  .score-table th { text-align:left; padding:7px 9px; color:var(--text-muted); font-weight:600; font-size:10px; letter-spacing:0.5px; text-transform:uppercase; border-bottom:1px solid var(--border); }
+  .score-table td { padding:9px 9px; border-bottom:1px solid rgba(30,42,69,0.5); }
+  .score-table tr:last-child td { border-bottom:none; }
+  .score-table tr.winner td { background:rgba(245,166,35,0.07); }
+  .score-table tr.winner td:first-child { color:var(--gold); font-weight:600; }
+  .total-cell { font-family:'Orbitron',monospace; font-weight:700; color:var(--mars2); }
+  .game-actions { display:flex; gap:8px; margin-top:10px; }
+
+  /* ---- CATEGORIES ---- */
+  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+  .cat-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:15px; }
+  .cat-title { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); font-weight:600; margin-bottom:11px; display:flex; align-items:center; gap:6px; }
+  .cat-icon { font-size:15px; }
+  .cat-bar-row { display:flex; flex-direction:column; gap:4px; margin-bottom:7px; }
+  .cat-bar-label { display:flex; justify-content:space-between; font-size:12px; }
+  .cat-bar-track { height:7px; background:var(--bg); border-radius:4px; overflow:hidden; }
+  .cat-bar-fill { height:100%; border-radius:4px; transition:width 0.6s cubic-bezier(.22,1,.36,1); }
+
+  /* ---- SEASON ---- */
+  .season-selector { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .season-btn { padding:9px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; color:var(--text-muted); font-family:'Exo 2',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:7px; }
+  .season-btn:hover { border-color:var(--text-muted); color:var(--text); }
+  .season-btn.active-spring { background:linear-gradient(135deg,#1a5c2a,#0d3316); border-color:#2ecc71; color:#7fffc4; box-shadow:0 2px 10px rgba(46,204,113,0.2); }
+  .season-btn.active-autumn { background:linear-gradient(135deg,#6b3010,#3d1a08); border-color:#e67e22; color:#ffd59e; box-shadow:0 2px 10px rgba(230,126,34,0.2); }
+  .season-header { display:flex; align-items:center; gap:14px; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+  .season-icon { font-size:32px; line-height:1; }
+  .season-title-text { font-family:'Orbitron',monospace; font-size:18px; font-weight:700; }
+  .season-title-text.spring { color:#2ecc71; }
+  .season-title-text.autumn { color:#e67e22; }
+  .season-subtitle { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .season-stats-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px; margin-bottom:20px; }
+  .season-stat { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:13px; text-align:center; }
+  .season-stat-val { font-family:'Orbitron',monospace; font-size:20px; font-weight:700; color:var(--mars2); }
+  .season-stat-lbl { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+
+  /* ---- SCORE ENTRY ---- */
+  .player-score-block { margin-bottom:18px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:15px; }
+
+  /* ---- EMPTY STATE ---- */
+  .empty { text-align:center; padding:50px 20px; color:var(--text-muted); }
+  .empty-icon { font-size:44px; margin-bottom:10px; opacity:0.5; }
+  .empty-text { font-size:14px; }
+
+  /* ---- MODAL ---- */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; padding:20px; }
+  .modal-overlay.show { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:26px; width:100%; max-width:700px; max-height:90vh; overflow-y:auto; transform:translateY(20px); transition:transform 0.2s; }
+  .modal-overlay.show .modal { transform:translateY(0); }
+  .modal-title { font-family:'Orbitron',monospace; font-size:14px; letter-spacing:2px; color:var(--mars2); text-transform:uppercase; margin-bottom:20px; }
+  .modal-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+
+  /* ---- TOAST ---- */
+  .toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 24px; font-size:14px; z-index:400; opacity:0; transition:all 0.3s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.success { border-color:#2ecc71; color:#2ecc71; }
+  .toast.error { border-color:#e74c3c; color:#e74c3c; }
+
+  @media(max-width:600px) {
+    .rank-stats { display:none; }
+    .tabs { gap:2px; }
+    .tab { font-size:10px; padding:7px 8px; min-width:70px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="planet"></div>
+    <div class="logo">Terraforming Mars</div>
+    <div class="logo-sub">Tulosseuranta</div>
+  </header>
+
+  <!-- Auth bar -->
+  <div class="auth-bar">
+    <span class="auth-status" id="auth-status">Julkinen näkymä</span>
+    <button class="btn-auth" id="auth-btn" onclick="toggleAuthModal()">🔐 Kirjaudu</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('ranking')">🏆 Ranking</button>
+    <button class="tab" onclick="showTab('games')">🎲 Pelit</button>
+    <button class="tab" onclick="showTab('season')">🌍 Season</button>
+    <button class="tab" onclick="showTab('categories')">📊 Kategoriat</button>
+    <button class="tab admin-only" id="tab-add" onclick="showTab('add')">➕ Lisää peli</button>
+  </div>
+
+  <!-- RANKING -->
+  <div id="panel-ranking" class="panel active">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+        <div class="card-title" style="margin-bottom:0">Pelaajien ranking</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="ranking-filter">
+          <button class="filter-btn active" onclick="setRankingFilter(0)">Kaikki</button>
+          <button class="filter-btn" onclick="setRankingFilter(3)">3 pelaajaa</button>
+          <button class="filter-btn" onclick="setRankingFilter(4)">4 pelaajaa</button>
+          <button class="filter-btn" onclick="setRankingFilter(5)">5 pelaajaa</button>
+          <button class="filter-btn" onclick="setRankingFilter(6)">6 pelaajaa</button>
+        </div>
+      </div>
+      <div id="ranking-list" class="ranking-list"></div>
+    </div>
+  </div>
+
+  <!-- GAMES -->
+  <div id="panel-games" class="panel">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+        <div class="card-title" style="margin-bottom:0">Kaikki pelit</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="games-filter">
+          <button class="filter-btn active" onclick="setGamesFilter(0)">Kaikki</button>
+          <button class="filter-btn" onclick="setGamesFilter(3)">3 pelaajaa</button>
+          <button class="filter-btn" onclick="setGamesFilter(4)">4 pelaajaa</button>
+          <button class="filter-btn" onclick="setGamesFilter(5)">5 pelaajaa</button>
+          <button class="filter-btn" onclick="setGamesFilter(6)">6 pelaajaa</button>
+        </div>
+      </div>
+      <div id="games-list" class="games-list"></div>
+    </div>
+  </div>
+
+  <!-- SEASON -->
+  <div id="panel-season" class="panel">
+    <div id="season-content"></div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div id="panel-categories" class="panel">
+    <div id="cat-sections"></div>
+  </div>
+
+  <!-- ADD GAME (admin only) -->
+  <div id="panel-add" class="panel">
+    <div class="card">
+      <div class="card-title">Lisää uusi peli</div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="field-group">
+          <div class="field-label">Päivämäärä</div>
+          <input class="field-input" type="date" id="inp-date">
+        </div>
+        <div class="field-group">
+          <div class="field-label">Pelinumero</div>
+          <div class="field-input" id="inp-gamenum-display" style="opacity:0.6;cursor:default;background:var(--surface2);">—</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">🌍 Sukupolvi (lopetus)</div>
+          <input class="field-input" type="number" id="inp-generation" placeholder="esim. 12" min="1" max="30">
+        </div>
+      </div>
+
+      <div class="card-title" style="margin-top:18px;">Käytössä olevat lisäosat</div>
+      <div class="expansion-row">
+        <div class="exp-chip exp-prelude"  id="exp-Prelude"   onclick="toggleExpansion('Prelude')">🌱 Prelude</div>
+        <div class="exp-chip exp-venus"    id="exp-Venus"     onclick="toggleExpansion('Venus')">☁️ Venus Next</div>
+        <div class="exp-chip exp-turmoil"  id="exp-Turmoil"   onclick="toggleExpansion('Turmoil')">🔥 Turmoil</div>
+        <div class="exp-chip exp-colonies" id="exp-Colonies"  onclick="toggleExpansion('Colonies')">🛸 Colonies</div>
+      </div>
+
+      <div class="card-title" style="margin-top:4px;">Kartta-asetukset</div>
+      <div class="map-type-row">
+        <div class="map-type-btn" id="map-btn-standard" onclick="selectMapType('standard')">🗺️ Peruskartta</div>
+        <div class="map-type-btn" id="map-btn-random"   onclick="selectMapType('random')">🎲 Random-kartta</div>
+      </div>
+      <div id="random-presets" style="display:none;">
+        <div class="field-label" style="margin-bottom:8px;">Random-kartan asetus</div>
+        <div class="random-preset-grid" id="preset-grid"></div>
+      </div>
+
+      <div class="card-title" style="margin-top:4px;">Valitse pelaajat <span style="font-size:11px;color:var(--text-muted);font-family:'Exo 2',sans-serif;font-weight:400;letter-spacing:0;margin-left:6px;">— järjestys = aloitusjärjestys</span></div>
+      <div id="player-select" class="players-row"></div>
+      <div class="flex gap-2" style="margin-bottom:16px;">
+        <input class="field-input" id="new-player-name" placeholder="Lisää uusi pelaaja..." style="max-width:220px;">
+        <button class="btn btn-secondary" onclick="addPlayer()">Lisää</button>
+      </div>
+
+      <div id="score-sections" style="margin-top:20px;"></div>
+
+      <div class="flex gap-2 mt-3" style="margin-top:20px;">
+        <button class="btn" id="save-game-btn" onclick="saveGame()">Tallenna peli</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Tyhjennä</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <div class="modal-title">Muokkaa pelitulosta</div>
+    <div id="edit-modal-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Peruuta</button>
+      <button class="btn" onclick="saveEdit()">Tallenna</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login modal -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <div class="login-title">🔐 Admin kirjautuminen</div>
+    <div class="field-group" style="margin-bottom:12px;">
+      <div class="field-label">Sähköposti</div>
+      <input class="field-input" type="email" id="login-email" placeholder="admin@example.com">
+    </div>
+    <div class="field-group" style="margin-bottom:4px;">
+      <div class="field-label">Salasana</div>
+      <input class="field-input" type="password" id="login-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-error" id="login-error"></div>
+    <div class="flex gap-2 mt-3" style="margin-top:16px;">
+      <button class="btn" onclick="doLogin()">Kirjaudu</button>
+      <button class="btn btn-secondary" onclick="closeLoginModal()">Peruuta</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// SUPABASE INIT
+// ============================================================
+const SUPABASE_URL = 'https://ixghjaselkwipbjgmrps.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_RJGC8unRN6fRKuZ2yi4ujA_GaPWAuCB';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const SCORE_FIELDS = [
+  { key:'tr',         label:'TR',             icon:'🌡️' },
+  { key:'awards',     label:'Awards',         icon:'🏅' },
+  { key:'milestones', label:'Milestones',     icon:'🎯' },
+  { key:'cities',     label:'Cities',         icon:'🏙️' },
+  { key:'greeneries', label:'Greeneries',     icon:'🌿' },
+  { key:'cards',      label:'Cards & Events', icon:'🃏' },
+  { key:'delegates',  label:'Delegates',      icon:'🗳️' },
+  { key:'pathfinder', label:'Pathfinder',     icon:'🛸' },
+  { key:'venus',      label:'Venus Phase',    icon:'☁️' },
+  { key:'total',      label:'Total',          icon:'⭐' },
+];
+const PLAYER_COLORS = ['#e85d1a','#3b82f6','#2ecc71','#8b5cf6','#f5a623','#e74c3c','#1abc9c','#e91e63'];
+const EXPANSIONS = [
+  { key:'Prelude',  label:'Prelude',    icon:'🌱', cls:'exp-prelude'  },
+  { key:'Venus',    label:'Venus Next', icon:'☁️', cls:'exp-venus'    },
+  { key:'Turmoil',  label:'Turmoil',   icon:'🔥', cls:'exp-turmoil'  },
+  { key:'Colonies', label:'Colonies',  icon:'🛸', cls:'exp-colonies' },
+];
+const MAP_PRESETS = [
+  { key:'Default',          label:'Default',          icon:'🌍' },
+  { key:'FirstExplorers',   label:'First Explorers',  icon:'🔭' },
+  { key:'MartianDesert',    label:'Martian Desert',   icon:'🏜️' },
+  { key:'RichDeposits',     label:'Rich Deposits',    icon:'💎' },
+  { key:'FastTerraformers', label:'Fast Terraformers',icon:'⚡' },
+  { key:'JungleWorld',      label:'Jungle World',     icon:'🌴' },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let state = { players:[], games:[], isAdmin:false };
+let rankingFilter = 0;
+let gamesFilter   = 0;
+let currentSeason = null;
+
+// Form state
+let formSelectedPlayers    = [];
+let formSelectedExpansions = [];
+let formMapType   = null;
+let formMapPreset = null;
+
+// ============================================================
+// HELPERS
+// ============================================================
+function getPlayerColor(name) {
+  const idx = state.players.findIndex(p => (p.name||p) === name);
+  return PLAYER_COLORS[Math.max(idx,0) % PLAYER_COLORS.length];
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function setLoading(elId, msg='Ladataan...') {
+  document.getElementById(elId).innerHTML = `<div class="loading"><div class="spinner"></div>${msg}</div>`;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+async function initAuth() {
+  const { data:{ session } } = await sb.auth.getSession();
+  setAuthState(session?.user ?? null);
+  sb.auth.onAuthStateChange((_e, session) => setAuthState(session?.user ?? null));
+}
+
+function setAuthState(user) {
+  state.isAdmin = !!user;
+  document.getElementById('auth-status').textContent = user ? `👤 ${user.email}` : 'Julkinen näkymä';
+  document.getElementById('auth-status').className = 'auth-status' + (user ? ' logged-in' : '');
+  document.getElementById('auth-btn').textContent = user ? '🚪 Kirjaudu ulos' : '🔐 Kirjaudu';
+  document.getElementById('auth-btn').className = 'btn-auth' + (user ? ' logout' : '');
+  document.getElementById('auth-btn').onclick = user ? doLogout : toggleAuthModal;
+  // Show/hide admin tab
+  document.getElementById('tab-add').classList.toggle('visible', state.isAdmin);
+  // Re-render games to show/hide edit buttons
+  const active = document.querySelector('.panel.active');
+  if(active?.id === 'panel-games') renderGames();
+  if(active?.id === 'panel-ranking') renderRanking();
+}
+
+function toggleAuthModal() {
+  document.getElementById('login-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('login-email').focus(), 100);
+}
+function closeLoginModal() {
+  document.getElementById('login-overlay').classList.remove('show');
+  document.getElementById('login-error').textContent = '';
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-password').value;
+  document.getElementById('login-error').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if(error) { document.getElementById('login-error').textContent = 'Väärä sähköposti tai salasana.'; return; }
+  closeLoginModal();
+  showToast('Kirjauduttu sisään ✓');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  showToast('Kirjauduttu ulos');
+}
+
+// ============================================================
+// DATA LOADING
+// ============================================================
+async function loadData() {
+  // Load players
+  const { data: players } = await sb.from('players').select('*').order('id');
+  // Load games with scores
+  const { data: games }   = await sb.from('games').select('*, scores(*)').order('game_num');
+  state.players = players || [];
+  // Normalise games: attach scores as array sorted by turn_order
+  state.games = (games || []).map(g => ({
+    ...g,
+    expansions: g.expansions || [],
+    scores: (g.scores || [])
+      .sort((a,b) => a.turn_order - b.turn_order)
+      .map(s => ({
+        player: s.player_name,
+        turn_order: s.turn_order,
+        tr: s.tr, awards: s.awards, milestones: s.milestones,
+        cities: s.cities, greeneries: s.greeneries, cards: s.cards,
+        delegates: s.delegates, pathfinder: s.pathfinder, venus: s.venus,
+        total: s.total,
+      }))
+  }));
+}
+
+async function refreshAndRender() {
+  await loadData();
+  const active = document.querySelector('.panel.active');
+  const name = active?.id?.replace('panel-','') || 'ranking';
+  if(name === 'ranking')    renderRanking();
+  if(name === 'games')      renderGames();
+  if(name === 'season')     renderSeason();
+  if(name === 'categories') renderCategories();
+  if(name === 'add')        renderAddForm();
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', ['ranking','games','season','categories','add'][i] === name);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if(name === 'ranking')    renderRanking();
+  if(name === 'games')      renderGames();
+  if(name === 'season')     renderSeason();
+  if(name === 'categories') renderCategories();
+  if(name === 'add')        renderAddForm();
+}
+
+// ============================================================
+// RANKING
+// ============================================================
+function setRankingFilter(n) {
+  rankingFilter = n;
+  document.querySelectorAll('#ranking-filter .filter-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === [0,3,4,5,6].indexOf(n)));
+  renderRanking();
+}
+
+function renderRanking() {
+  const el = document.getElementById('ranking-list');
+  const filtered = rankingFilter === 0 ? state.games
+    : state.games.filter(g => (g.scores||[]).length === rankingFilter);
+  if(!filtered.length) {
+    el.innerHTML = state.games.length
+      ? `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Ei ${rankingFilter} pelaajan pelejä.</div></div>`
+      : '<div class="empty"><div class="empty-icon">🪐</div><div class="empty-text">Ei vielä pelejä.</div></div>';
+    return;
+  }
+  const stats = {};
+  filtered.forEach(g => {
+    const scores = g.scores || [];
+    const max = Math.max(...scores.map(s=>s.total||0));
+    const winner = scores.find(s=>s.total===max)?.player;
+    scores.forEach(s => {
+      if(!stats[s.player]) stats[s.player] = { wins:0, games:0, total:0, best:0 };
+      stats[s.player].games++;
+      stats[s.player].total += s.total||0;
+      if((s.total||0) > stats[s.player].best) stats[s.player].best = s.total;
+      if(s.player === winner) stats[s.player].wins++;
+    });
+  });
+  const ranked = Object.entries(stats)
+    .map(([name,s]) => ({ name, avg: Math.round(s.total/s.games), ...s }))
+    .sort((a,b) => b.avg - a.avg);
+  el.innerHTML = ranked.map((p,i) => `
+    <div class="rank-item rank-${i+1}" style="border-left:3px solid ${getPlayerColor(p.name)}">
+      <div class="rank-num">${i+1}</div>
+      <div style="width:34px;height:34px;border-radius:50%;background:${getPlayerColor(p.name)};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:white;flex-shrink:0">${p.name[0].toUpperCase()}</div>
+      <div class="rank-name">${p.name}</div>
+      <div class="rank-stats"><span>${p.games} peliä</span><span>${p.wins} voittoa</span><span>Paras: ${p.best}</span></div>
+      ${p.wins>0?`<span class="rank-badge">👑 ${p.wins}x</span>`:''}
+      <div class="rank-score">${p.avg}</div>
+    </div>`).join('');
+}
+
+// ============================================================
+// GAMES
+// ============================================================
+function setGamesFilter(n) {
+  gamesFilter = n;
+  document.querySelectorAll('#games-filter .filter-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === [0,3,4,5,6].indexOf(n)));
+  renderGames();
+}
+
+function buildGameCard(g, idPrefix='gc') {
+  const ord = g.scores || [];
+  const srt = [...ord].sort((a,b)=>(b.total||0)-(a.total||0));
+  const winner  = srt[0]?.player || '';
+  const starter = ord[0]?.player || '';
+  const expTags = (g.expansions||[]).map(e => {
+    const exp = EXPANSIONS.find(x=>x.key===e);
+    return exp ? `<span class="exp-tag exp-tag-${e.toLowerCase()}">${exp.icon} ${exp.label}</span>` : '';
+  }).join('');
+  const mapTag = g.map_type==='standard'
+    ? `<span class="map-tag map-tag-standard">🗺️ Peruskartta</span>`
+    : g.map_type==='random'
+      ? `<span class="map-tag map-tag-random">🎲 Random${g.map_preset?': '+(MAP_PRESETS.find(p=>p.key===g.map_preset)?.label||g.map_preset):''}</span>`
+      : '';
+  const genTag = g.generation
+    ? `<span class="exp-tag" style="background:rgba(245,166,35,0.12);color:var(--gold);border:1px solid rgba(245,166,35,0.3);">🌍 Gen ${g.generation}</span>` : '';
+  const adminBtns = state.isAdmin ? `
+    <div class="game-actions">
+      <button class="btn btn-secondary" style="font-size:11px;padding:7px 12px" data-action="edit" data-id="${g.id}">✏️ Muokkaa</button>
+      <button class="btn btn-danger"    style="font-size:11px;padding:7px 12px" data-action="delete" data-id="${g.id}">🗑️ Poista</button>
+    </div>` : '';
+  return `
+    <div class="game-card" id="${idPrefix}-${g.id}">
+      <div class="game-header" onclick="document.getElementById('${idPrefix}-${g.id}').classList.toggle('open')">
+        <div class="game-header-left">
+          <span class="game-num">PELI #${g.game_num||g.id}</span>
+          <span class="game-date">${g.date||''}</span>
+          <span class="game-players">${ord.map((s,i)=>i===0?`<span style="color:var(--mars2)">⚑ ${s.player}</span>`:s.player).join(', ')}</span>
+          ${genTag}${expTags}${mapTag}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="game-winner">👑 ${winner}</span>
+          <span class="game-expand">▼</span>
+        </div>
+      </div>
+      <div class="game-details">
+        <table class="score-table">
+          <thead><tr><th>Pelaaja</th>${SCORE_FIELDS.map(f=>`<th>${f.label}</th>`).join('')}</tr></thead>
+          <tbody>${srt.map((s,i)=>`
+            <tr class="${i===0?'winner':''}">
+              <td>${i===0?'👑 ':''}${s.player}${s.player===starter?' <span style="font-size:10px;color:var(--mars2)">⚑</span>':''}</td>
+              ${SCORE_FIELDS.map(f=>`<td class="${f.key==='total'?'total-cell':''}">${s[f.key]??'-'}</td>`).join('')}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        ${adminBtns}
+      </div>
+    </div>`;
+}
+
+function renderGames() {
+  const el = document.getElementById('games-list');
+  if(!state.games.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🎲</div><div class="empty-text">Ei vielä pelejä.</div></div>';
+    return;
+  }
+  const filtered = [...state.games].reverse()
+    .filter(g => gamesFilter===0 || (g.scores||[]).length===gamesFilter);
+  if(!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Ei ${gamesFilter} pelaajan pelejä.</div></div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(g => buildGameCard(g)).join('');
+  el.onclick = function(e) {
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    e.stopPropagation();
+    const id = parseInt(btn.dataset.id);
+    if(btn.dataset.action==='delete') deleteGame(id);
+    if(btn.dataset.action==='edit')   editGame(id);
+  };
+}
+
+async function deleteGame(id) {
+  const g = state.games.find(x=>x.id===id);
+  if(!g || !window.confirm(`Poistetaanko Peli #${g.game_num}?`)) return;
+  const { error } = await sb.from('games').delete().eq('id', id);
+  if(error) { showToast('Virhe poistamisessa', 'error'); return; }
+  showToast('Peli poistettu');
+  await refreshAndRender();
+}
+
+// ============================================================
+// SEASON
+// ============================================================
+function getSeasonFromDate(dateStr) {
+  if(!dateStr) return null;
+  const d = new Date(dateStr);
+  const month = d.getMonth();
+  const year  = d.getFullYear() % 100;
+  const type  = month <= 5 ? 'spring' : 'autumn';
+  return { type, year, key:`${type}-${year}`, label:(type==='spring'?'🌱 Kevät':'🍂 Syksy')+` '${String(year).padStart(2,'0')}` };
+}
+
+function getAllSeasons() {
+  const seen = new Map();
+  state.games.forEach(g => {
+    const s = getSeasonFromDate(g.date);
+    if(s && !seen.has(s.key)) seen.set(s.key, s);
+  });
+  return [...seen.values()].sort((a,b) => a.year!==b.year ? a.year-b.year : a.type==='spring'?-1:1);
+}
+
+function renderSeason() {
+  const el = document.getElementById('season-content');
+  const seasons = getAllSeasons();
+  if(!seasons.length) {
+    el.innerHTML = '<div class="card"><div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Ei pelejä joilla on päivämäärä.</div></div></div>';
+    return;
+  }
+  if(!currentSeason || !seasons.find(s=>s.key===currentSeason))
+    currentSeason = seasons[seasons.length-1].key;
+  const season = seasons.find(s=>s.key===currentSeason);
+  const seasonGames = state.games.filter(g => { const s=getSeasonFromDate(g.date); return s&&s.key===currentSeason; });
+  const stats = {};
+  seasonGames.forEach(g => {
+    const scores = g.scores||[];
+    const max = Math.max(...scores.map(s=>s.total||0));
+    const winner = scores.find(s=>s.total===max)?.player;
+    scores.forEach(s => {
+      if(!stats[s.player]) stats[s.player]={wins:0,games:0,total:0,best:0};
+      stats[s.player].games++;
+      stats[s.player].total += s.total||0;
+      if((s.total||0)>stats[s.player].best) stats[s.player].best=s.total;
+      if(s.player===winner) stats[s.player].wins++;
+    });
+  });
+  const ranked = Object.entries(stats)
+    .map(([name,s])=>({name,avg:Math.round(s.total/s.games),...s}))
+    .sort((a,b)=>b.avg-a.avg);
+  const champion  = ranked[0];
+  const highScore = ranked.reduce((m,p)=>p.best>m?p.best:m,0);
+  const avgScore  = ranked.length ? Math.round(ranked.reduce((a,p)=>a+p.avg,0)/ranked.length) : 0;
+  const mostWins  = ranked.reduce((b,p)=>p.wins>(b?.wins||0)?p:b,null);
+
+  el.innerHTML = `
+    <div class="season-selector">
+      ${seasons.map(s=>`
+        <button class="season-btn ${s.key===currentSeason?(s.type==='spring'?'active-spring':'active-autumn'):''}"
+          onclick="selectSeason('${s.key}')">
+          ${s.type==='spring'?'🌱':'🍂'} ${s.type==='spring'?'Kevät':'Syksy'} '${String(s.year).padStart(2,'0')}
+        </button>`).join('')}
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="season-header">
+        <div class="season-icon">${season.type==='spring'?'🌱':'🍂'}</div>
+        <div>
+          <div class="season-title-text ${season.type}">${season.type==='spring'?'Kevät':'Syksy'} '${String(season.year).padStart(2,'0')}</div>
+          <div class="season-subtitle">${season.type==='spring'?'1.1–30.6':'1.7–31.12'} · ${seasonGames.length} peliä</div>
+        </div>
+        ${champion?`<div style="margin-left:auto;text-align:right">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px">Season-mestari</div>
+          <div style="font-size:17px;font-weight:700;color:var(--gold)">👑 ${champion.name}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${champion.avg} ka · ${champion.wins} voittoa</div>
+        </div>`:''}
+      </div>
+      <div class="season-stats-row">
+        <div class="season-stat"><div class="season-stat-val">${seasonGames.length}</div><div class="season-stat-lbl">Pelejä</div></div>
+        <div class="season-stat"><div class="season-stat-val">${ranked.length}</div><div class="season-stat-lbl">Pelaajaa</div></div>
+        <div class="season-stat"><div class="season-stat-val">${highScore}</div><div class="season-stat-lbl">Huipputulos</div></div>
+        <div class="season-stat"><div class="season-stat-val">${avgScore}</div><div class="season-stat-lbl">Ka pisteet</div></div>
+        ${mostWins?`<div class="season-stat"><div class="season-stat-val" style="font-size:14px">${mostWins.name}</div><div class="season-stat-lbl">Eniten voittoja (${mostWins.wins})</div></div>`:''}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-title">Season ranking</div>
+      <div class="ranking-list">
+        ${ranked.map((p,i)=>`
+          <div class="rank-item rank-${i+1}" style="border-left:3px solid ${getPlayerColor(p.name)}">
+            <div class="rank-num">${i+1}</div>
+            <div style="width:32px;height:32px;border-radius:50%;background:${getPlayerColor(p.name)};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:white;flex-shrink:0">${p.name[0].toUpperCase()}</div>
+            <div class="rank-name">${p.name}</div>
+            <div class="rank-stats"><span>${p.games} peliä</span><span>${p.wins} voittoa</span><span>Paras: ${p.best}</span></div>
+            ${p.wins>0?`<span class="rank-badge">👑 ${p.wins}x</span>`:''}
+            <div class="rank-score">${p.avg}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">${season.type==='spring'?'Kevät':'Syksy'} '${String(season.year).padStart(2,'0')} pelit</div>
+      <div class="games-list">${[...seasonGames].reverse().map(g=>buildGameCard(g,'sg')).join('')}</div>
+    </div>`;
+}
+
+function selectSeason(key) { currentSeason=key; renderSeason(); }
+
+// ============================================================
+// CATEGORIES
+// ============================================================
+function renderCategories() {
+  const el = document.getElementById('cat-sections');
+  if(!state.games.length) {
+    el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei pelejä</div></div>';
+    return;
+  }
+  const cats = SCORE_FIELDS.filter(f=>f.key!=='total');
+  const sections = [3,4,5,6].map(n => {
+    const games = state.games.filter(g=>(g.scores||[]).length===n);
+    if(!games.length) return '';
+    const players = [...new Set(games.flatMap(g=>(g.scores||[]).map(s=>s.player)))];
+    const avgs = {};
+    players.forEach(p=>{ avgs[p]={}; cats.forEach(c=>avgs[p][c.key]=[]); });
+    games.forEach(g=>(g.scores||[]).forEach(s=>{
+      if(!avgs[s.player]) return;
+      cats.forEach(c=>{ if(s[c.key]!=null) avgs[s.player][c.key].push(s[c.key]); });
+    }));
+    const catCards = cats.map(cat=>{
+      const vals = players.map(p=>{ const arr=avgs[p][cat.key]; return {player:p,avg:arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0}; }).sort((a,b)=>b.avg-a.avg);
+      const max = Math.max(...vals.map(v=>v.avg),1);
+      return `<div class="cat-card">
+        <div class="cat-title"><span class="cat-icon">${cat.icon}</span>${cat.label}</div>
+        ${vals.map(v=>`
+          <div class="cat-bar-row">
+            <div class="cat-bar-label"><span>${v.player}</span><span>${v.avg.toFixed(1)}</span></div>
+            <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.avg/max*100).toFixed(1)}%;background:${getPlayerColor(v.player)}"></div></div>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:20px">
+      <div class="card-title">${n} pelaajan pelit <span style="margin-left:auto;font-size:11px;color:var(--text-muted);font-family:'Exo 2',sans-serif;font-weight:400;letter-spacing:0">${games.length} peliä</span></div>
+      <div class="cat-grid">${catCards}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = sections || '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei tarpeeksi pelejä</div></div>';
+}
+
+// ============================================================
+// ADD FORM
+// ============================================================
+function renderAddForm() {
+  const dateEl = document.getElementById('inp-date');
+  if(!dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+  const nextNum = state.games.length ? Math.max(...state.games.map(g=>g.game_num||0))+1 : 1;
+  const nd = document.getElementById('inp-gamenum-display');
+  if(nd) nd.textContent = 'Peli #' + nextNum;
+  EXPANSIONS.forEach(exp => {
+    const el = document.getElementById('exp-'+exp.key);
+    if(el) el.classList.toggle('selected', formSelectedExpansions.includes(exp.key));
+  });
+  const el = document.getElementById('player-select');
+  if(!el) return;
+  el.innerHTML = state.players.map(p => {
+    const name = p.name || p;
+    const idx = formSelectedPlayers.indexOf(name);
+    const sel = idx !== -1;
+    const badge = sel ? `<span style="background:rgba(255,255,255,0.2);border-radius:10px;padding:1px 6px;font-size:11px;font-weight:700;">${idx+1}</span>` : '';
+    return `<div class="player-chip ${sel?'selected':''}" onclick="toggleFormPlayer('${name}')"><div class="dot"></div>${name}${badge}</div>`;
+  }).join('');
+  renderScoreSections();
+}
+
+function toggleFormPlayer(name) {
+  if(formSelectedPlayers.includes(name)) formSelectedPlayers = formSelectedPlayers.filter(x=>x!==name);
+  else formSelectedPlayers.push(name);
+  renderAddForm();
+}
+
+async function addPlayer() {
+  const inp = document.getElementById('new-player-name');
+  const name = inp.value.trim();
+  if(!name) return;
+  if(state.players.find(p=>(p.name||p)===name)) { inp.value=''; return; }
+  const color = PLAYER_COLORS[state.players.length % PLAYER_COLORS.length];
+  const { error } = await sb.from('players').insert({ name, color });
+  if(error) { showToast('Virhe pelaajan lisäämisessä', 'error'); return; }
+  await loadData();
+  formSelectedPlayers.push(name);
+  inp.value = '';
+  renderAddForm();
+}
+
+function renderScoreSections() {
+  const el = document.getElementById('score-sections');
+  if(!el || !formSelectedPlayers.length) { if(el) el.innerHTML=''; return; }
+  el.innerHTML = formSelectedPlayers.map(p => `
+    <div class="player-score-block">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:30px;height:30px;border-radius:50%;background:${getPlayerColor(p)};display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:14px">${p[0].toUpperCase()}</div>
+        <strong>${p}</strong>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">Total: <span id="td-${p}" style="color:var(--mars2);font-family:'Orbitron',monospace;font-weight:700">0</span></span>
+      </div>
+      <div class="form-grid">
+        ${SCORE_FIELDS.filter(f=>f.key!=='total').map(f=>`
+          <div class="field-group">
+            <div class="field-label">${f.icon} ${f.label}</div>
+            <input class="field-input" type="number" id="sc-${p}-${f.key}" placeholder="0" min="0" oninput="calcTotal('${p}')">
+          </div>`).join('')}
+        <div class="field-group">
+          <div class="field-label">⭐ Total</div>
+          <input class="field-input" type="number" id="sc-${p}-total" readonly
+            style="border-color:var(--mars);font-weight:700;font-family:'Orbitron',monospace;font-size:17px;cursor:default;opacity:0.85;" value="0">
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function calcTotal(p) {
+  const sum = SCORE_FIELDS.filter(f=>f.key!=='total')
+    .reduce((acc,f) => acc + (parseInt(document.getElementById(`sc-${p}-${f.key}`)?.value)||0), 0);
+  const el = document.getElementById(`sc-${p}-total`);
+  if(el) el.value = sum;
+}
+
+function toggleExpansion(key) {
+  if(formSelectedExpansions.includes(key)) formSelectedExpansions=formSelectedExpansions.filter(x=>x!==key);
+  else formSelectedExpansions.push(key);
+  EXPANSIONS.forEach(exp => {
+    const el = document.getElementById('exp-'+exp.key);
+    if(el) el.classList.toggle('selected', formSelectedExpansions.includes(exp.key));
+  });
+}
+
+function selectMapType(type) {
+  formMapType = type; formMapPreset = null;
+  document.getElementById('map-btn-standard').className = 'map-type-btn'+(type==='standard'?' active-standard':'');
+  document.getElementById('map-btn-random').className   = 'map-type-btn'+(type==='random'?' active-random':'');
+  const pre = document.getElementById('random-presets');
+  if(type==='random') { pre.style.display='block'; renderPresets(); }
+  else pre.style.display='none';
+}
+
+function renderPresets() {
+  document.getElementById('preset-grid').innerHTML = MAP_PRESETS.map(p=>`
+    <div class="preset-btn ${formMapPreset===p.key?'selected':''}" onclick="selectPreset('${p.key}')">
+      <span>${p.icon}</span><span>${p.label}</span>
+    </div>`).join('');
+}
+
+function selectPreset(key) { formMapPreset=key; renderPresets(); }
+
+async function saveGame() {
+  if(!formSelectedPlayers.length) { showToast('Valitse pelaajat!', 'error'); return; }
+  const btn = document.getElementById('save-game-btn');
+  btn.disabled = true;
+  const date = document.getElementById('inp-date').value || null;
+  const generation = parseInt(document.getElementById('inp-generation').value) || null;
+  const nextNum = state.games.length ? Math.max(...state.games.map(g=>g.game_num||0))+1 : 1;
+
+  // Insert game
+  const { data: gameData, error: gameErr } = await sb.from('games').insert({
+    game_num: nextNum, date, generation,
+    expansions: formSelectedExpansions,
+    map_type: formMapType,
+    map_preset: formMapType==='random' ? formMapPreset : null,
+  }).select().single();
+
+  if(gameErr) { showToast('Virhe pelin tallentamisessa', 'error'); btn.disabled=false; return; }
+
+  // Insert scores
+  const scoreRows = formSelectedPlayers.map((p, i) => ({
+    game_id: gameData.id,
+    player_name: p,
+    turn_order: i,
+    ...Object.fromEntries(SCORE_FIELDS.map(f => [f.key, parseInt(document.getElementById(`sc-${p}-${f.key}`)?.value)||0]))
+  }));
+
+  const { error: scoreErr } = await sb.from('scores').insert(scoreRows);
+  if(scoreErr) { showToast('Virhe pisteiden tallentamisessa', 'error'); btn.disabled=false; return; }
+
+  showToast('Peli tallennettu! ✓');
+  clearForm();
+  await refreshAndRender();
+  btn.disabled = false;
+  showTab('games');
+}
+
+function clearForm() {
+  formSelectedPlayers = []; formSelectedExpansions = [];
+  formMapType = null; formMapPreset = null;
+  const g = document.getElementById('inp-generation'); if(g) g.value='';
+  const d = document.getElementById('inp-date'); if(d) d.value='';
+  const mapS = document.getElementById('map-btn-standard'); if(mapS) mapS.className='map-type-btn';
+  const mapR = document.getElementById('map-btn-random');   if(mapR) mapR.className='map-type-btn';
+  const rp = document.getElementById('random-presets'); if(rp) rp.style.display='none';
+  renderAddForm();
+}
+
+// ============================================================
+// EDIT GAME
+// ============================================================
+let editingId = null;
+
+function editGame(id) {
+  const g = state.games.find(x=>x.id===id);
+  if(!g) return;
+  editingId = id;
+  const scores = g.scores || [];
+  document.getElementById('edit-modal-content').innerHTML = `
+    <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:14px">
+      <div class="field-group"><div class="field-label">Päivämäärä</div>
+        <input class="field-input" type="date" id="edit-date" value="${g.date||''}"></div>
+      <div class="field-group"><div class="field-label">Pelinumero</div>
+        <input class="field-input" type="number" id="edit-gamenum" value="${g.game_num||''}"></div>
+      <div class="field-group"><div class="field-label">🌍 Sukupolvi</div>
+        <input class="field-input" type="number" id="edit-generation" placeholder="esim. 12" min="1" max="30" value="${g.generation||''}"></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="field-label" style="margin-bottom:8px">Lisäosat</div>
+      <div class="expansion-row">
+        ${EXPANSIONS.map(exp=>`
+          <div class="exp-chip ${exp.cls} ${(g.expansions||[]).includes(exp.key)?'selected':''}"
+               id="edit-exp-${exp.key}" onclick="document.getElementById('edit-exp-${exp.key}').classList.toggle('selected')">
+            ${exp.icon} ${exp.label}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="field-label" style="margin-bottom:8px">Kartta-asetukset</div>
+      <div class="map-type-row">
+        <div class="map-type-btn ${g.map_type==='standard'?'active-standard':''}" id="edit-map-std" onclick="selectEditMap('standard')">🗺️ Peruskartta</div>
+        <div class="map-type-btn ${g.map_type==='random'?'active-random':''}"     id="edit-map-rnd" onclick="selectEditMap('random')">🎲 Random-kartta</div>
+      </div>
+      <div id="edit-random-presets" style="${g.map_type==='random'?'':'display:none'}">
+        <div class="field-label" style="margin-bottom:8px">Random-kartan asetus</div>
+        <div class="random-preset-grid">
+          ${MAP_PRESETS.map(p=>`
+            <div class="preset-btn ${g.map_preset===p.key?'selected':''}" id="edit-preset-${p.key}" onclick="selectEditPreset('${p.key}')">
+              <span>${p.icon}</span><span>${p.label}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${scores.map(s=>`
+      <div class="player-score-block">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div style="width:26px;height:26px;border-radius:50%;background:${getPlayerColor(s.player)};display:flex;align-items:center;justify-content:center;color:white;font-size:12px;font-weight:700">${s.player[0].toUpperCase()}</div>
+          <strong>${s.player}</strong>
+        </div>
+        <div class="form-grid">
+          ${SCORE_FIELDS.filter(f=>f.key!=='total').map(f=>`
+            <div class="field-group">
+              <div class="field-label">${f.label}</div>
+              <input class="field-input" type="number" id="edit-${s.player}-${f.key}" value="${s[f.key]??0}" oninput="calcEditTotal('${s.player}')">
+            </div>`).join('')}
+          <div class="field-group">
+            <div class="field-label">⭐ Total</div>
+            <input class="field-input" type="number" id="edit-${s.player}-total" readonly
+              style="border-color:var(--mars);font-weight:700;font-family:'Orbitron',monospace;font-size:17px;cursor:default;opacity:0.85;" value="${s.total??0}">
+          </div>
+        </div>
+      </div>`).join('')}`;
+  document.getElementById('edit-modal').classList.add('show');
+}
+
+function selectEditMap(type) {
+  document.getElementById('edit-map-std').className = 'map-type-btn'+(type==='standard'?' active-standard':'');
+  document.getElementById('edit-map-rnd').className = 'map-type-btn'+(type==='random'?' active-random':'');
+  document.getElementById('edit-random-presets').style.display = type==='random' ? 'block' : 'none';
+  if(type!=='random') document.querySelectorAll('[id^="edit-preset-"]').forEach(el=>el.classList.remove('selected'));
+}
+function selectEditPreset(key) {
+  document.querySelectorAll('[id^="edit-preset-"]').forEach(el=>el.classList.remove('selected'));
+  document.getElementById('edit-preset-'+key)?.classList.add('selected');
+}
+function calcEditTotal(p) {
+  const sum = SCORE_FIELDS.filter(f=>f.key!=='total')
+    .reduce((acc,f) => acc+(parseInt(document.getElementById(`edit-${p}-${f.key}`)?.value)||0), 0);
+  const el = document.getElementById(`edit-${p}-total`);
+  if(el) el.value=sum;
+}
+
+async function saveEdit() {
+  const g = state.games.find(x=>x.id===editingId);
+  if(!g) return;
+  const { error: gameErr } = await sb.from('games').update({
+    date:       document.getElementById('edit-date').value || null,
+    game_num:   parseInt(document.getElementById('edit-gamenum').value) || g.game_num,
+    generation: parseInt(document.getElementById('edit-generation').value) || null,
+    expansions: EXPANSIONS.filter(exp=>document.getElementById('edit-exp-'+exp.key)?.classList.contains('selected')).map(e=>e.key),
+    map_type:   document.getElementById('edit-map-rnd')?.classList.contains('active-random') ? 'random'
+              : document.getElementById('edit-map-std')?.classList.contains('active-standard') ? 'standard' : null,
+    map_preset: document.getElementById('edit-map-rnd')?.classList.contains('active-random')
+              ? (MAP_PRESETS.find(p=>document.getElementById('edit-preset-'+p.key)?.classList.contains('selected'))?.key||null) : null,
+  }).eq('id', editingId);
+  if(gameErr) { showToast('Virhe tallentamisessa', 'error'); return; }
+
+  // Update each player's score row
+  for(const s of (g.scores||[])) {
+    const updates = {};
+    SCORE_FIELDS.forEach(f => {
+      const v = document.getElementById(`edit-${s.player}-${f.key}`)?.value;
+      if(v !== undefined) updates[f.key] = parseInt(v)||0;
+    });
+    await sb.from('scores').update(updates).eq('game_id', editingId).eq('player_name', s.player);
+  }
+
+  showToast('Muutokset tallennettu ✓');
+  closeModal();
+  await refreshAndRender();
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.remove('show');
+  editingId = null;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  document.getElementById('ranking-list').innerHTML = '<div class="loading"><div class="spinner"></div>Ladataan...</div>';
+  await initAuth();
+  await loadData();
+  renderRanking();
+}
+
+init();
+</script>
+</body>
+</html>
