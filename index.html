@@ -1106,6 +1106,15 @@ function renderPlayerProfile() {
   const worstTotal = Math.min(...scores.map(s=>s.total||0));
   const avgPos     = (scores.reduce((a,s)=>a+s.pos,0)/totalGames+1).toFixed(1);
 
+  // Final position avg and median (1-based)
+  const positions = scores.map(s => s.pos + 1);
+  const avgPosFinal = (positions.reduce((a,b)=>a+b,0) / positions.length).toFixed(1);
+  const sortedPos = [...positions].sort((a,b)=>a-b);
+  const midPos = Math.floor(sortedPos.length/2);
+  const medianPos = sortedPos.length % 2 !== 0
+    ? sortedPos[midPos]
+    : ((sortedPos[midPos-1] + sortedPos[midPos]) / 2).toFixed(1);
+
   // Start position (turn_order is 0-based, display as 1-based)
   const startPositions = scores.map(s => (s.turn_order ?? 0) + 1);
   const avgStart = (startPositions.reduce((a,b)=>a+b,0) / startPositions.length).toFixed(1);
@@ -1158,6 +1167,14 @@ function renderPlayerProfile() {
         <div class="profile-stat">
           <div class="profile-stat-val bronze">${thirds}</div>
           <div class="profile-stat-lbl">🥉 Kolmas sija</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${avgPosFinal}</div>
+          <div class="profile-stat-lbl">Ka sijoitus</div>
+        </div>
+        <div class="profile-stat">
+          <div class="profile-stat-val">${medianPos}</div>
+          <div class="profile-stat-lbl">Mediaani sijoitus</div>
         </div>
         <div class="profile-stat">
           <div class="profile-stat-val">${winPct}%</div>
