@@ -221,7 +221,7 @@
   .game-actions { display:flex; gap:8px; margin-top:10px; }
 
   /* ---- CATEGORIES ---- */
-  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px; }
+  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px; }
   .cat-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:15px; }
   .cat-title { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); font-weight:600; margin-bottom:11px; display:flex; align-items:center; gap:6px; }
   .cat-icon { font-size:15px; }
@@ -1231,43 +1231,119 @@ function renderPlayerProfile() {
 }
 
 // ============================================================
-// CATEGORIES
+// CATEGORIES / STATISTIIKKAA
 // ============================================================
+let statsFilter = 0; // 0 = kaikki
+
+function setStatsFilter(n) {
+  statsFilter = n;
+  document.querySelectorAll('#stats-filter .filter-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === [0,3,4,5,6].indexOf(n)));
+  renderCategoriesContent();
+}
+
+function median(arr) {
+  if(!arr.length) return 0;
+  const s = [...arr].sort((a,b)=>a-b);
+  const m = Math.floor(s.length/2);
+  return s.length % 2 !== 0 ? s[m] : (s[m-1]+s[m])/2;
+}
+
 function renderCategories() {
   const el = document.getElementById('cat-sections');
   if(!state.games.length) {
     el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei pelejä</div></div>';
     return;
   }
-  const cats = SCORE_FIELDS.filter(f=>f.key!=='total');
-  const sections = [3,4,5,6].map(n => {
-    const games = state.games.filter(g=>(g.scores||[]).length===n);
-    if(!games.length) return '';
-    const players = [...new Set(games.flatMap(g=>(g.scores||[]).map(s=>s.player)))];
-    const avgs = {};
-    players.forEach(p=>{ avgs[p]={}; cats.forEach(c=>avgs[p][c.key]=[]); });
-    games.forEach(g=>(g.scores||[]).forEach(s=>{
-      if(!avgs[s.player]) return;
-      cats.forEach(c=>{ if(s[c.key]!=null) avgs[s.player][c.key].push(s[c.key]); });
-    }));
-    const catCards = cats.map(cat=>{
-      const vals = players.map(p=>{ const arr=avgs[p][cat.key]; return {player:p,avg:arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0}; }).sort((a,b)=>b.avg-a.avg);
-      const max = Math.max(...vals.map(v=>v.avg),1);
-      return `<div class="cat-card">
-        <div class="cat-title"><span class="cat-icon">${cat.icon}</span>${cat.label}</div>
-        ${vals.map(v=>`
-          <div class="cat-bar-row">
-            <div class="cat-bar-label"><span>${v.player}</span><span>${v.avg.toFixed(1)}</span></div>
-            <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.avg/max*100).toFixed(1)}%;background:${getPlayerColor(v.player)}"></div></div>
-          </div>`).join('')}
-      </div>`;
-    }).join('');
-    return `<div class="card" style="margin-bottom:20px">
-      <div class="card-title">${n} pelaajan pelit <span style="margin-left:auto;font-size:11px;color:var(--text-muted);font-family:'Exo 2',sans-serif;font-weight:400;letter-spacing:0">${games.length} peliä</span></div>
-      <div class="cat-grid">${catCards}</div>
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div class="card-title" style="margin-bottom:0">Statistiikkaa</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="stats-filter">
+          <button class="filter-btn ${statsFilter===0?'active':''}" onclick="setStatsFilter(0)">Kaikki</button>
+          <button class="filter-btn ${statsFilter===3?'active':''}" onclick="setStatsFilter(3)">3 pelaajaa</button>
+          <button class="filter-btn ${statsFilter===4?'active':''}" onclick="setStatsFilter(4)">4 pelaajaa</button>
+          <button class="filter-btn ${statsFilter===5?'active':''}" onclick="setStatsFilter(5)">5 pelaajaa</button>
+          <button class="filter-btn ${statsFilter===6?'active':''}" onclick="setStatsFilter(6)">6 pelaajaa</button>
+        </div>
+      </div>
+    </div>
+    <div id="stats-content"></div>`;
+  renderCategoriesContent();
+}
+
+function renderCategoriesContent() {
+  const el = document.getElementById('stats-content');
+  if(!el) return;
+
+  const games = statsFilter === 0
+    ? state.games
+    : state.games.filter(g => (g.scores||[]).length === statsFilter);
+
+  if(!games.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Ei ${statsFilter} pelaajan pelejä.</div></div>`;
+    return;
+  }
+
+  const cats = SCORE_FIELDS.filter(f => f.key !== 'total');
+  const players = [...new Set(games.flatMap(g => (g.scores||[]).map(s => s.player)))];
+
+  // Collect all values per player per category
+  const data = {};
+  players.forEach(p => { data[p] = {}; cats.forEach(c => data[p][c.key] = []); });
+  games.forEach(g => (g.scores||[]).forEach(s => {
+    if(!data[s.player]) return;
+    cats.forEach(c => { if(s[c.key] != null) data[s.player][c.key].push(s[c.key]); });
+  }));
+
+  // Build one card per category, but only if at least one player has non-zero data
+  const catCards = cats.map(cat => {
+    const vals = players.map(p => {
+      const arr = data[p][cat.key];
+      const avg = arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+      const med = median(arr);
+      return { player: p, avg, med, count: arr.length };
+    });
+
+    // Hide category if all values are zero
+    if(vals.every(v => v.avg === 0)) return '';
+
+    const maxAvg = Math.max(...vals.map(v=>v.avg), 1);
+    const maxMed = Math.max(...vals.map(v=>v.med), 1);
+    const sortedByAvg = [...vals].sort((a,b)=>b.avg-a.avg);
+
+    return `<div class="cat-card">
+      <div class="cat-title"><span class="cat-icon">${cat.icon}</span>${cat.label}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Keskiarvo</div>
+          ${sortedByAvg.map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span>${v.avg.toFixed(1)}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.avg/maxAvg*100).toFixed(1)}%;background:${getPlayerColor(v.player)}"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Mediaani</div>
+          ${[...vals].sort((a,b)=>b.med-a.med).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span>${v.med.toFixed(1)}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.med/maxMed*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.7"></div></div>
+            </div>`).join('')}
+        </div>
+      </div>
     </div>`;
-  }).join('');
-  el.innerHTML = sections || '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei tarpeeksi pelejä</div></div>';
+  }).filter(Boolean).join('');
+
+  const gameCount = games.length;
+  const label = statsFilter === 0 ? `Kaikki pelit (${gameCount})` : `${statsFilter} pelaajan pelit (${gameCount})`;
+
+  el.innerHTML = catCards
+    ? `<div class="card" style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--text-muted)">📊 ${label}</div>
+       </div>
+       <div class="cat-grid">${catCards}</div>`
+    : `<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Ei tarpeeksi dataa.</div></div>`;
 }
 
 // ============================================================
