@@ -221,7 +221,7 @@
   .game-actions { display:flex; gap:8px; margin-top:10px; }
 
   /* ---- CATEGORIES ---- */
-  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:14px; }
+  .cat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(480px,1fr)); gap:14px; }
   .cat-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:15px; }
   .cat-title { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--text-muted); font-weight:600; margin-bottom:11px; display:flex; align-items:center; gap:6px; }
   .cat-icon { font-size:15px; }
@@ -1302,7 +1302,8 @@ function renderCategoriesContent() {
       const arr = data[p][cat.key];
       const avg = arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
       const med = median(arr);
-      return { player: p, avg, med, count: arr.length };
+      const max = arr.length ? Math.max(...arr) : 0;
+      return { player: p, avg, med, max, count: arr.length };
     });
 
     // Hide category if all values are zero
@@ -1310,11 +1311,12 @@ function renderCategoriesContent() {
 
     const maxAvg = Math.max(...vals.map(v=>v.avg), 1);
     const maxMed = Math.max(...vals.map(v=>v.med), 1);
+    const maxMax = Math.max(...vals.map(v=>v.max), 1);
     const sortedByAvg = [...vals].sort((a,b)=>b.avg-a.avg);
 
     return `<div class="cat-card">
       <div class="cat-title"><span class="cat-icon">${cat.icon}</span>${cat.label}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div>
           <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Keskiarvo</div>
           ${sortedByAvg.map(v=>`
@@ -1329,6 +1331,14 @@ function renderCategoriesContent() {
             <div class="cat-bar-row">
               <div class="cat-bar-label"><span>${v.player}</span><span>${v.med.toFixed(1)}</span></div>
               <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.med/maxMed*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.7"></div></div>
+            </div>`).join('')}
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Isoin</div>
+          ${[...vals].sort((a,b)=>b.max-a.max).map(v=>`
+            <div class="cat-bar-row">
+              <div class="cat-bar-label"><span>${v.player}</span><span style="color:var(--gold)">${v.max}</span></div>
+              <div class="cat-bar-track"><div class="cat-bar-fill" style="width:${(v.max/maxMax*100).toFixed(1)}%;background:${getPlayerColor(v.player)};opacity:0.5"></div></div>
             </div>`).join('')}
         </div>
       </div>
