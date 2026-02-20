@@ -51,13 +51,8 @@
   /* ---- HEADER ---- */
   header { text-align:center; padding:40px 0 30px; }
   header::after { content:''; display:block; width:200px; height:2px; margin:16px auto 0; background:linear-gradient(90deg,transparent,var(--mars),transparent); }
-  .planet {
-    width:60px; height:60px; border-radius:50%; margin:0 auto 14px;
-    background:radial-gradient(circle at 35% 35%,#e87a3a,#c0440a 50%,#6b1a02);
-    box-shadow:0 0 40px var(--glow),inset -10px -10px 20px rgba(0,0,0,0.5);
-    animation:pulse 4s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100%{box-shadow:0 0 40px var(--glow)} 50%{box-shadow:0 0 70px rgba(232,93,26,0.5)} }
+  .planet { margin:0 auto 14px; width:70px; height:70px; animation:pulse 4s ease-in-out infinite; filter:drop-shadow(0 0 20px rgba(192,68,10,0.6)); }
+  @keyframes pulse { 0%,100%{filter:drop-shadow(0 0 20px rgba(192,68,10,0.5))} 50%{filter:drop-shadow(0 0 40px rgba(232,93,26,0.8))} }
   .logo     { font-family:'Orbitron',monospace; font-size:clamp(20px,5vw,38px); font-weight:900; letter-spacing:3px; text-transform:uppercase; background:linear-gradient(135deg,var(--mars2),var(--gold)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
   .logo-sub { font-family:'Orbitron',monospace; font-size:11px; letter-spacing:6px; color:var(--muted); text-transform:uppercase; margin-top:4px; }
 
@@ -304,7 +299,139 @@
 <div class="app">
 
   <header>
-    <div class="planet"></div>
+    <svg class="planet" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="marsTexture">
+          <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="6" seed="3" result="noise"/>
+          <feColorMatrix type="saturate" values="0.4" in="noise" result="desatNoise"/>
+          <feBlend in="SourceGraphic" in2="desatNoise" mode="multiply" result="textured"/>
+          <feComposite in="textured" in2="SourceGraphic" operator="in"/>
+        </filter>
+        <filter id="craterBlur">
+          <feGaussianBlur stdDeviation="0.4"/>
+        </filter>
+        <filter id="atmosphereBlur">
+          <feGaussianBlur stdDeviation="1.5"/>
+        </filter>
+
+        <!-- Realistic Mars base: ochre-red with proper dark terminator -->
+        <radialGradient id="marsBase" cx="36%" cy="32%" r="65%" gradientUnits="objectBoundingBox">
+          <stop offset="0%"   stop-color="#c8692e"/>
+          <stop offset="20%"  stop-color="#b85520"/>
+          <stop offset="45%"  stop-color="#9e3d10"/>
+          <stop offset="72%"  stop-color="#6b2208"/>
+          <stop offset="100%" stop-color="#1e0800"/>
+        </radialGradient>
+
+        <!-- Secondary color variation: dusty highlands -->
+        <radialGradient id="highlands" cx="30%" cy="45%" r="55%">
+          <stop offset="0%"   stop-color="rgba(195,120,55,0.5)"/>
+          <stop offset="50%"  stop-color="rgba(160,75,25,0.2)"/>
+          <stop offset="100%" stop-color="rgba(120,45,10,0)"/>
+        </radialGradient>
+
+        <!-- Specular highlight — small bright spot where sun hits -->
+        <radialGradient id="specular" cx="32%" cy="28%" r="22%">
+          <stop offset="0%"   stop-color="rgba(255,210,160,0.45)"/>
+          <stop offset="40%"  stop-color="rgba(240,170,100,0.15)"/>
+          <stop offset="100%" stop-color="rgba(230,140,70,0)"/>
+        </radialGradient>
+
+        <!-- Terminator shadow on dark side -->
+        <radialGradient id="terminator" cx="85%" cy="55%" r="55%">
+          <stop offset="0%"   stop-color="rgba(0,0,0,0.85)"/>
+          <stop offset="40%"  stop-color="rgba(0,0,0,0.4)"/>
+          <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
+        </radialGradient>
+
+        <!-- Polar cap -->
+        <radialGradient id="polarN" cx="50%" cy="0%" r="60%">
+          <stop offset="0%"   stop-color="rgba(235,225,215,0.98)"/>
+          <stop offset="45%"  stop-color="rgba(210,195,180,0.6)"/>
+          <stop offset="100%" stop-color="rgba(190,165,140,0)"/>
+        </radialGradient>
+
+        <!-- Atmosphere halo -->
+        <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+          <stop offset="82%"  stop-color="rgba(0,0,0,0)"/>
+          <stop offset="92%"  stop-color="rgba(195,85,25,0.3)"/>
+          <stop offset="100%" stop-color="rgba(150,55,10,0)"/>
+        </radialGradient>
+
+        <clipPath id="mc"><circle cx="50" cy="50" r="47"/></clipPath>
+      </defs>
+
+      <!-- Atmosphere halo (behind planet) -->
+      <circle cx="50" cy="50" r="49.5" fill="rgba(180,70,15,0.18)" filter="url(#atmosphereBlur)"/>
+
+      <!-- Base sphere -->
+      <circle cx="50" cy="50" r="47" fill="url(#marsBase)"/>
+
+      <!-- Noise texture layer -->
+      <circle cx="50" cy="50" r="47" fill="url(#marsBase)" filter="url(#marsTexture)" opacity="0.55" clip-path="url(#mc)"/>
+
+      <!-- Highland color variation -->
+      <circle cx="50" cy="50" r="47" fill="url(#highlands)" clip-path="url(#mc)"/>
+
+      <!-- === SURFACE FEATURES === -->
+      <g clip-path="url(#mc)">
+
+        <!-- Tharsis Plateau — large elevated reddish region west -->
+        <ellipse cx="30" cy="46" rx="16" ry="12" fill="rgba(175,80,25,0.35)" transform="rotate(10,30,46)"/>
+
+        <!-- Olympus Mons — slightly brighter peak on Tharsis -->
+        <ellipse cx="24" cy="40" rx="5" ry="4" fill="rgba(200,110,50,0.4)" transform="rotate(5,24,40)"/>
+        <ellipse cx="24" cy="40" rx="2" ry="1.5" fill="rgba(220,140,70,0.5)"/>
+
+        <!-- Valles Marineris — long dark canyon system -->
+        <ellipse cx="51" cy="54" rx="26" ry="3.2" fill="rgba(35,8,0,0.65)" transform="rotate(-7,51,54)" filter="url(#craterBlur)"/>
+        <ellipse cx="50" cy="53" rx="22" ry="1.8" fill="rgba(20,4,0,0.5)" transform="rotate(-7,50,53)"/>
+        <!-- Canyon wall highlights -->
+        <ellipse cx="50" cy="51.5" rx="21" ry="1" fill="rgba(160,65,20,0.3)" transform="rotate(-7,50,51.5)"/>
+
+        <!-- Hellas Planitia — huge dark impact basin southeast -->
+        <ellipse cx="65" cy="68" rx="11" ry="8" fill="rgba(20,4,0,0.6)" transform="rotate(-15,65,68)" filter="url(#craterBlur)"/>
+        <ellipse cx="65" cy="68" rx="8" ry="5.5" fill="rgba(30,8,2,0.45)" transform="rotate(-15,65,68)"/>
+
+        <!-- Argyre basin — southwest -->
+        <ellipse cx="36" cy="70" rx="7" ry="5" fill="rgba(28,6,0,0.5)" transform="rotate(12,36,70)" filter="url(#craterBlur)"/>
+
+        <!-- Acidalia Planitia — dark northern plain -->
+        <ellipse cx="42" cy="28" rx="18" ry="9" fill="rgba(45,12,2,0.4)" transform="rotate(-5,42,28)"/>
+
+        <!-- Arabia Terra — lighter cratered highlands -->
+        <ellipse cx="62" cy="40" rx="12" ry="8" fill="rgba(155,70,22,0.25)" transform="rotate(8,62,40)"/>
+
+        <!-- Small craters -->
+        <circle cx="72" cy="32" r="2.5" fill="rgba(18,4,0,0.55)" filter="url(#craterBlur)"/>
+        <circle cx="72" cy="32" r="1.5" fill="rgba(25,6,0,0.4)"/>
+        <circle cx="44" cy="63" r="2"   fill="rgba(20,5,0,0.5)"  filter="url(#craterBlur)"/>
+        <circle cx="58" cy="76" r="1.8" fill="rgba(22,5,0,0.45)" filter="url(#craterBlur)"/>
+        <circle cx="30" cy="58" r="1.5" fill="rgba(18,4,0,0.4)"  filter="url(#craterBlur)"/>
+        <circle cx="76" cy="55" r="1.2" fill="rgba(20,5,0,0.4)"  filter="url(#craterBlur)"/>
+
+        <!-- Dust storm haze — subtle bright streaks -->
+        <ellipse cx="48" cy="44" rx="14" ry="2.5" fill="rgba(210,120,55,0.2)" transform="rotate(-10,48,44)"/>
+        <ellipse cx="62" cy="48" rx="8"  ry="1.5" fill="rgba(200,105,45,0.15)" transform="rotate(4,62,48)"/>
+      </g>
+
+      <!-- Specular highlight -->
+      <circle cx="50" cy="50" r="47" fill="url(#specular)" clip-path="url(#mc)"/>
+
+      <!-- Terminator (dark side shadow) -->
+      <circle cx="50" cy="50" r="47" fill="url(#terminator)" clip-path="url(#mc)"/>
+
+      <!-- North polar ice cap -->
+      <ellipse cx="50" cy="8"  rx="13" ry="6.5" fill="url(#polarN)"              clip-path="url(#mc)"/>
+      <ellipse cx="50" cy="7"  rx="8"  ry="3.5"  fill="rgba(240,230,220,0.85)"   clip-path="url(#mc)"/>
+
+      <!-- South polar cap (smaller, partially in shadow) -->
+      <ellipse cx="50" cy="91" rx="6"  ry="3.2" fill="rgba(220,210,200,0.7)"     clip-path="url(#mc)"/>
+
+      <!-- Atmosphere rim glow -->
+      <circle cx="50" cy="50" r="47" fill="url(#halo)"/>
+      <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(195,85,25,0.22)" stroke-width="2.5"/>
+    </svg>
     <div class="logo">Terraforming Mars</div>
     <div class="logo-sub">Tulosseuranta</div>
   </header>
