@@ -803,6 +803,16 @@ function renderRecentWinners() {
     </div>`;
 }
 
+function playGeggoFanfare() {
+  try {
+    const audio = new Audio('geggo.mp3');
+    audio.volume = 0.8;
+    audio.play();
+  } catch(e) {
+    // fail silently
+  }
+}
+
 // ============================================================
 // RANKING
 // ============================================================
@@ -817,6 +827,8 @@ function renderRanking() {
   }
   const ranked = buildPlayerStats(games).sort(SORT_FNS[ui.rankingSort]);
   el.innerHTML  = ranked.map((p, i) => buildRankingRow(p, i, ui.rankingSort)).join('');
+
+  if (ranked[0]?.name === 'Geggo') playGeggoFanfare();
 }
 
 // ============================================================
@@ -921,6 +933,8 @@ function renderSeasonRanking() {
   if (!el || !seasonRanked.length) return;
   const sorted = [...seasonRanked].sort(SORT_FNS[ui.seasonSort]);
   el.innerHTML = sorted.map((p, i) => buildRankingRow(p, i, ui.seasonSort)).join('');
+
+  if (sorted[0]?.name === 'Geggo') playGeggoFanfare();
 }
 
 function renderSeason() {
@@ -1114,6 +1128,8 @@ function renderPlayerProfile() {
           <span style="margin-left:auto;font-family:'Orbitron',monospace;font-size:16px;font-weight:700;color:var(--mars2)">${s.total}</span>
         </div>`).join('')}
     </div>`;
+
+  if (name === 'Geggo') playGeggoFanfare();
 }
 
 // ============================================================
